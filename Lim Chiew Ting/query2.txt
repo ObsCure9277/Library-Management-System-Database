@@ -1,0 +1,49 @@
+CREATE OR REPLACE VIEW MemberBehaviour AS
+SELECT
+    M.memberID,
+    M.memberName,
+    COUNT(F.fineID) AS totalLateReturns,  -- Total late return times (combining both paid and unpaid)
+    SUM(CASE WHEN F.fineStatus = 'Paid' THEN F.amount ELSE 0 END) AS totalPaidFines,
+    SUM(CASE WHEN F.fineStatus = 'Unpaid' THEN F.amount ELSE 0 END) AS totalUnpaidFines
+FROM
+    Members M
+JOIN
+    Borrows B ON M.memberID = B.memberID
+JOIN
+    BorrowDetails BD ON B.borrowID = BD.borrowID
+JOIN
+    Fines F ON F.borrowID = BD.borrowID AND F.bookCopyID = BD.bookCopyID
+GROUP BY
+    M.memberID, M.memberName
+HAVING
+    SUM(F.amount) > 20
+ORDER BY
+    totalPaidFines DESC, totalUnpaidFines DESC;
+
+
+SET linesize 150
+SET pagesize 150
+
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD-MM-YYYY';
+COLUMN memberID FORMAT A15
+COLUMN memberName FORMAT A45
+COLUMN totalLateReturns HEADING 'Total Late Return Times'
+COLUMN totalPaidFines HEADING 'Paid Fines Amount'
+COLUMN totalUnpaidFines HEADING 'Unpaid Fines Amount'
+
+
+TTITLE CENTER "Members Late Return Behavior" SKIP 2
+
+
+SELECT
+    memberID,
+    memberName,
+    totalLateReturns,
+    totalPaidFines,
+    totalUnpaidFines
+FROM
+    MemberBehaviour
+ORDER BY
+    totalPaidFines DESC, 
+    totalUnpaidFines ASC;
+TTITLE OFF

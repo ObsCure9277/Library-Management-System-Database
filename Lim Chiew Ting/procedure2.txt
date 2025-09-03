@@ -1,0 +1,67 @@
+DROP SEQUENCE seq_member_id;
+
+CREATE SEQUENCE seq_member_id
+START WITH 12
+INCREMENT BY 1
+NOCACHE;
+
+CREATE OR REPLACE PROCEDURE add_new_member (
+    p_memberName        IN Members.memberName%TYPE,
+    p_memberEmail       IN Members.memberEmail%TYPE,
+    p_password          IN Members.password%TYPE,
+    p_expiryDate        IN Members.expiryDate%TYPE
+) AS
+    v_new_memberID     Members.memberID%TYPE;
+    v_count_email      NUMBER;
+BEGIN
+    -- Check if email already exists
+    SELECT COUNT(*) INTO v_count_email
+    FROM Members
+    WHERE LOWER(memberEmail) = LOWER(p_memberEmail);
+
+    IF v_count_email > 0 THEN
+        RAISE_APPLICATION_ERROR(-20010, 'Email already exists for another member.');
+    END IF;
+
+    -- Generate new member ID using sequence
+    SELECT 'MEM' || LPAD(seq_member_id.NEXTVAL, 2, '0')
+    INTO v_new_memberID
+    FROM dual;
+
+    -- Insert new member
+    INSERT INTO Members (
+        memberID,
+        memberName,
+        memberEmail,
+        membershipStatus,
+        expiryDate,
+        password
+    ) VALUES (
+        v_new_memberID,
+        p_memberName,
+        p_memberEmail,
+        'Active',
+        p_expiryDate,
+        p_password
+    );
+    DBMS_OUTPUT.PUT_LINE('Member added successfully with ID: ' || v_new_memberID);
+
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
+        RAISE_APPLICATION_ERROR(-20011, 'Error adding member: ' || SQLERRM);
+END;
+/
+
+EXEC add_new_member('Yvvone Yee','yee@gmail.com','Yeepassword123',TO_DATE('31-01-2026', 'DD-MM-YYYY'));
+
+SET LINESIZE 200;
+SET PAGESIZE 50;
+COLUMN memberID FORMAT A8;
+COLUMN memberName FORMAT A20;
+COLUMN memberEmail FORMAT A25;
+COLUMN membershipStatus FORMAT A10;
+COLUMN expiryDate FORMAT A12;
+COLUMN password FORMAT A15;
+
+Select * FROM Members WHERE memberID = 'MEM12';

@@ -1,0 +1,59 @@
+CREATE INDEX idx_books_pubID ON Books(publisherID);
+CREATE INDEX idx_books_author ON Books(author);
+CREATE INDEX idx_books_genre ON Books(genre);
+
+CREATE OR REPLACE PROCEDURE Add_New_Book (
+    p_ISBN             CHAR,
+    p_bookName         VARCHAR,
+    p_publicationDate  DATE,
+    p_genre            VARCHAR,
+    p_author           VARCHAR,
+    p_popularity       INTEGER DEFAULT 0,
+    p_publisherID      CHAR
+)
+IS
+    v_count_pub       INTEGER;
+    v_today           DATE := SYSDATE;
+BEGIN
+    -- 1. Check if publisher exists
+    SELECT COUNT(*) INTO v_count_pub
+    FROM Publishers
+    WHERE publisherID = p_publisherID;
+
+    IF v_count_pub = 0 THEN
+        RAISE_APPLICATION_ERROR(-20001, 'Publisher ID does not exist.');
+    END IF;
+
+    -- 2. Check publication date is not in future
+    IF p_publicationDate > v_today THEN
+        RAISE_APPLICATION_ERROR(-20002, 'Publication date cannot be in the future.');
+    END IF;
+
+    -- 3. Insert the new book
+    INSERT INTO Books (
+        ISBN, bookName, publicationDate, genre,
+        author, popularity, publisherID
+    ) VALUES (
+        p_ISBN, p_bookName, p_publicationDate, p_genre,
+        p_author, NVL(p_popularity, 0), p_publisherID
+    );
+
+    DBMS_OUTPUT.PUT_LINE('Book "' || p_bookName || '" added successfully.');
+
+EXCEPTION
+    WHEN DUP_VAL_ON_INDEX THEN
+        RAISE_APPLICATION_ERROR(-20003, 'ISBN already exists. Use a unique ISBN.');
+    WHEN OTHERS THEN
+        RAISE_APPLICATION_ERROR(-20004, 'Unexpected error: ' || SQLERRM);
+END;
+/
+
+--SampleData
+--Duplicate ISBN
+EXEC Add_New_Book('9781234567890','Database Design Guide',TO_DATE('10-03-2024', 'DD-MM-YYYY'), 'Technology','John Tan',NULL,'PUB01');
+
+--NonExistPUBID
+EXEC Add_New_Book('9781234567290','Database Design Guide',TO_DATE('10-03-2024', 'DD-MM-YYYY'), 'Technology','John Tan',NULL,'PUB21');
+
+--CorrectData
+EXEC Add_New_Book('9781234567290','Database Design Guide',TO_DATE('10-03-2024', 'DD-MM-YYYY'), 'Technology','John Tan',NULL,'PUB01');

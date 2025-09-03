@@ -1,0 +1,98 @@
+CREATE OR REPLACE PROCEDURE sp_fine_report IS
+  -- Outer cursor: Distinct BorrowIDs from Fines
+  CURSOR cur_borrow_fines IS
+    SELECT DISTINCT f.borrowID, b.borrowDate, b.dueDate
+    FROM Fines f
+    JOIN Borrows b ON f.borrowID = b.borrowID
+    ORDER BY f.borrowID;
+
+  -- Inner cursor: All fine records per borrowID
+  CURSOR cur_fines(p_borrowID CHAR) IS
+    SELECT f.fineID, f.amount, f.fineStatus, f.payFineDate, f.bookCopyID,
+           p.paymentMethod
+    FROM Fines f
+    LEFT JOIN Payments p ON f.paymentID = p.paymentID
+    WHERE f.borrowID = p_borrowID;
+
+  -- Outer cursor vars
+  v_borrowID   CHAR(5);
+  v_borrowDate DATE;
+  v_dueDate    DATE;
+
+  -- Inner cursor vars
+  v_fineID        CHAR(5);
+  v_amount        INTEGER;
+  v_fineStatus    VARCHAR(50);
+  v_payFineDate   DATE;
+  v_bookCopyID    CHAR(5);
+  v_paymentMethod VARCHAR(50);
+
+  -- Summary counters
+  v_totalBorrowRecords NUMBER := 0;
+  v_totalFines         NUMBER := 0;
+  v_totalAmount        NUMBER := 0;
+
+BEGIN
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', 100, '='));
+  DBMS_OUTPUT.PUT_LINE('                   Fines Report by Borrowing Record');
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', 100, '='));
+
+  FOR borrow_rec IN cur_borrow_fines LOOP
+    v_borrowID := borrow_rec.borrowID;
+    v_borrowDate := borrow_rec.borrowDate;
+    v_dueDate := borrow_rec.dueDate;
+
+    v_totalBorrowRecords := v_totalBorrowRecords + 1;
+
+    -- Print header for each borrow record
+    DBMS_OUTPUT.PUT_LINE(CHR(10) || 'Borrow ID   : ' || v_borrowID);
+    DBMS_OUTPUT.PUT_LINE('Borrow Date : ' || TO_CHAR(v_borrowDate, 'YYYY-MM-DD'));
+    DBMS_OUTPUT.PUT_LINE('Due Date    : ' || TO_CHAR(v_dueDate, 'YYYY-MM-DD'));
+    DBMS_OUTPUT.PUT_LINE(RPAD('-', 100, '-'));
+    DBMS_OUTPUT.PUT_LINE(
+      RPAD('Fine ID',10) ||
+      RPAD('BookCopy',10) ||
+      RPAD('Amount',8) ||
+      RPAD('Status',10) ||
+      RPAD('Pay Date',15) ||
+      RPAD('Payment Method',20)
+    );
+    DBMS_OUTPUT.PUT_LINE(RPAD('-', 100, '-'));
+
+    OPEN cur_fines(v_borrowID);
+    LOOP
+      FETCH cur_fines INTO v_fineID, v_amount, v_fineStatus, v_payFineDate, v_bookCopyID, v_paymentMethod;
+      EXIT WHEN cur_fines%NOTFOUND;
+
+      v_totalFines := v_totalFines + 1;
+      v_totalAmount := v_totalAmount + v_amount;
+
+      DBMS_OUTPUT.PUT_LINE(
+        RPAD(v_fineID,10) ||
+        RPAD(v_bookCopyID,10) ||
+        RPAD(v_amount,8) ||
+        RPAD(v_fineStatus,10) ||
+        RPAD(NVL(TO_CHAR(v_payFineDate, 'YYYY-MM-DD'), 'N/A'),15) ||
+        RPAD(NVL(v_paymentMethod, 'Unpaid'),20)
+      );
+    END LOOP;
+    CLOSE cur_fines;
+
+    DBMS_OUTPUT.PUT_LINE(RPAD('=', 100, '='));
+  END LOOP;
+
+  -- Summary section
+  DBMS_OUTPUT.PUT_LINE(CHR(10));
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', 100, '='));
+  DBMS_OUTPUT.PUT_LINE('Summary:');
+  DBMS_OUTPUT.PUT_LINE('Total Borrow Records With Fines : ' || v_totalBorrowRecords);
+  DBMS_OUTPUT.PUT_LINE('Total Fine Records              : ' || v_totalFines);
+  DBMS_OUTPUT.PUT_LINE('Total Fine Amount               : RM ' || TO_CHAR(v_totalAmount, '9990.00'));
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', 100, '='));
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', 40, '=') || ' End of Fine Report ' || RPAD('=', 40, '='));
+END;
+/
+
+
+SET SERVEROUTPUT ON;
+EXEC sp_fine_report;

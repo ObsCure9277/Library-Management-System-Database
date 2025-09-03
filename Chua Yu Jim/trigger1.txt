@@ -1,0 +1,87 @@
+DROP TABLE ActionAttendanceLog;
+
+CREATE TABLE ActionAttendanceLog (
+  attendanceID     CHAR(5),
+  startTime        VARCHAR(20),
+  newStartTime     VARCHAR(20) DEFAULT '',
+  endTime          VARCHAR(20),
+  newEndTime       VARCHAR(20) DEFAULT '',
+  attendanceStatus VARCHAR(50),
+  newStatus        VARCHAR(50) DEFAULT '',
+  scheduleID       CHAR(5),
+  newScheduleID    CHAR(5) DEFAULT '',
+  userID           VARCHAR(30),
+  transDate        DATE,
+  transTime        CHAR(8),
+  transAction      VARCHAR(6)
+);
+
+CREATE OR REPLACE TRIGGER trg_track_attendance
+AFTER INSERT OR UPDATE OR DELETE ON Attendance
+FOR EACH ROW
+BEGIN
+  CASE
+    WHEN INSERTING THEN
+      INSERT INTO ActionAttendanceLog(
+        attendanceID, startTime, endTime, attendanceStatus, scheduleID,
+        userID, transDate, transTime, transAction)
+      VALUES (
+        :NEW.attendanceID,
+        TO_CHAR(:NEW.startTime, 'YYYY-MM-DD HH24:MI'),
+        TO_CHAR(:NEW.endTime,   'YYYY-MM-DD HH24:MI'),
+        :NEW.attendanceStatus,
+        :NEW.scheduleID,
+        USER,
+        SYSDATE,
+        TO_CHAR(SYSDATE, 'HH24:MI:SS'),
+        'INSERT');
+
+    WHEN UPDATING THEN
+      INSERT INTO ActionAttendanceLog(
+        attendanceID, startTime, newStartTime, endTime, newEndTime,
+        attendanceStatus, newStatus, scheduleID, newScheduleID,
+        userID, transDate, transTime, transAction)
+      VALUES (
+        :OLD.attendanceID,
+        TO_CHAR(:OLD.startTime, 'YYYY-MM-DD HH24:MI'),
+        TO_CHAR(:NEW.startTime, 'YYYY-MM-DD HH24:MI'),
+        TO_CHAR(:OLD.endTime,   'YYYY-MM-DD HH24:MI'),
+        TO_CHAR(:NEW.endTime,   'YYYY-MM-DD HH24:MI'),
+        :OLD.attendanceStatus,
+        :NEW.attendanceStatus,
+        :OLD.scheduleID,
+        :NEW.scheduleID,
+        USER,
+        SYSDATE,
+        TO_CHAR(SYSDATE, 'HH24:MI:SS'),
+        'UPDATE');
+
+    WHEN DELETING THEN
+      INSERT INTO ActionAttendanceLog(
+        attendanceID, startTime, endTime, attendanceStatus, scheduleID,
+        userID, transDate, transTime, transAction)
+      VALUES (
+        :OLD.attendanceID,
+        TO_CHAR(:OLD.startTime, 'YYYY-MM-DD HH24:MI'),
+        TO_CHAR(:OLD.endTime,   'YYYY-MM-DD HH24:MI'),
+        :OLD.attendanceStatus,
+        :OLD.scheduleID,
+        USER,
+        SYSDATE,
+        TO_CHAR(SYSDATE, 'HH24:MI:SS'),
+        'DELETE');
+  END CASE;
+END;
+/
+
+-- Insert example
+INSERT INTO Attendance VALUES ('AR001', SYSTIMESTAMP, SYSTIMESTAMP + INTERVAL '1' HOUR, 'Attend', 'SC001');
+
+-- Update example
+UPDATE Attendance SET attendanceStatus = 'Absence' WHERE attendanceID = 'AR001';
+
+-- Delete example
+DELETE FROM Attendance WHERE attendanceID = 'AR001';
+
+-- Check log
+SELECT * FROM ActionAttendanceLog;

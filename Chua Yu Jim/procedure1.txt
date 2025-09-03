@@ -1,0 +1,77 @@
+DROP SEQUENCE SCHEDULES_SEQ;
+
+CREATE SEQUENCE SCHEDULES_SEQ
+  START WITH 246
+  INCREMENT BY 1
+  NOCACHE
+  NOCYCLE;
+
+
+CREATE OR REPLACE PROCEDURE sp_create_shift(
+    p_staffID   IN VARCHAR,
+    p_startTime IN TIMESTAMP,
+    p_endTime   IN TIMESTAMP
+) AS
+    v_scheduleID   Schedules.scheduleID%TYPE;
+    v_hours        NUMBER;
+
+
+    ex_invalid_time EXCEPTION;
+    PRAGMA EXCEPTION_INIT(ex_invalid_time, -20007);
+BEGIN
+
+    IF p_startTime > p_endTime THEN 
+        RAISE ex_invalid_time;
+    END IF;
+
+    DBMS_OUTPUT.PUT_LINE(LPAD('=',120,'='));
+    DBMS_OUTPUT.PUT_LINE('Creating a New Shift Record');
+    DBMS_OUTPUT.PUT_LINE(LPAD('-',120,'-'));
+    DBMS_OUTPUT.PUT_LINE(
+        RPAD('ShiftID',10) || RPAD('StaffID',10) ||
+        RPAD('Start Time',25) || RPAD('End Time',25) || RPAD('Hours',6)
+    );
+    DBMS_OUTPUT.PUT_LINE(LPAD('-',120,'-'));
+
+    -- Generate ID
+    SELECT 'SC' || LPAD(SCHEDULES_SEQ.NEXTVAL, 3, '0') INTO v_scheduleID FROM DUAL;
+
+    -- Insert
+    INSERT INTO Schedules(scheduleID, staffID, startTime, endTime)
+    VALUES(v_scheduleID, p_staffID, p_startTime, p_endTime);
+
+    -- Calculate hours
+    v_hours := ROUND((CAST(p_endTime AS DATE) - CAST(p_startTime AS DATE)) * 24, 2);
+
+    -- Output
+    DBMS_OUTPUT.PUT_LINE(
+        RPAD(v_scheduleID,10) ||
+        RPAD(p_staffID,10) ||
+        RPAD(TO_CHAR(p_startTime,'YYYY-MM-DD HH24:MI'),25) ||
+        RPAD(TO_CHAR(p_endTime,  'YYYY-MM-DD HH24:MI'),25) ||
+        LPAD(v_hours,6)
+    );
+
+    DBMS_OUTPUT.PUT_LINE(LPAD('=',120,'='));
+    COMMIT;
+
+EXCEPTION
+    WHEN ex_invalid_time THEN
+        DBMS_OUTPUT.PUT_LINE('Error: The Start time is greater than the End Time.');
+        ROLLBACK;
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Unexpected error: ' || SQLERRM);
+        ROLLBACK;
+        RAISE;
+END sp_create_shift;
+/
+
+--exec method
+SET SERVEROUTPUT ON;
+
+-- each call generates a new SC### ID automatically
+EXEC sp_create_shift('STF02',TIMESTAMP '2023-07-02 08:00:00',TIMESTAMP '2023-07-02 12:00:00');
+
+EXEC sp_create_shift('STF03',TIMESTAMP '2023-07-02 12:30:00',TIMESTAMP '2023-07-02 16:30:00');
+
+EXEC sp_create_shift('STF04',TIMESTAMP '2023-07-03 09:00:00',TIMESTAMP '2023-07-03 17:00:00');

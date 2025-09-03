@@ -1,0 +1,50 @@
+CREATE OR REPLACE TRIGGER Prevent_Borrow_Disabled_Member
+BEFORE INSERT ON Borrows
+FOR EACH ROW
+DECLARE
+    v_status VARCHAR2(20);
+    v_lastID NUMBER;
+    v_lastCode VARCHAR2(10);
+BEGIN
+    -- 1. Check if memberID is NULL
+    IF :NEW.memberID IS NULL THEN
+        RAISE_APPLICATION_ERROR(-20002, 'Member ID cannot be NULL.');
+    END IF;
+
+    -- 2. Get member status
+    SELECT membershipStatus INTO v_status
+    FROM Members
+    WHERE memberID = :NEW.memberID;
+
+    -- 3. Reject if status is DISABLE
+    IF UPPER(TRIM(v_status)) = 'DISABLE' THEN
+        RAISE_APPLICATION_ERROR(-20001, 'Disabled members cannot borrow books.');
+    END IF;
+
+    -- 4. Check that borrow date is not in the future
+    IF :NEW.borrowDate > TRUNC(SYSDATE) THEN
+        RAISE_APPLICATION_ERROR(-20005, 'Borrow date cannot be in the future.');
+    END IF;
+
+    -- 5. Generate new borrowID like BR001, BR002
+    SELECT NVL(MAX(TO_NUMBER(SUBSTR(borrowID, 3))), 0)
+    INTO v_lastID FROM Borrows WHERE REGEXP_LIKE(borrowID, '^BR[0-9]+$');
+
+    v_lastID := v_lastID + 1;
+    :NEW.borrowID := 'BR' || LPAD(v_lastID, 3, '0');
+
+    -- 6. Set due date = borrowDate + 14 days
+    :NEW.dueDate := :NEW.borrowDate + 14;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RAISE_APPLICATION_ERROR(-20003, 'Member ID does not exist.');
+    WHEN OTHERS THEN
+        RAISE_APPLICATION_ERROR(-20004, 'Unexpected error: ' || SQLERRM);
+END;
+/
+
+
+INSERT INTO Borrows(borrowDate,memberID, staffID) VALUES (TO_DATE('21-04-2025', 'DD-MM-YYYY'),'MEM01', 'STF01');
+INSERT INTO Borrows (borrowDate,memberID, staffID)VALUES (TO_DATE('05-03-2025', 'DD-MM-YYYY'),'MEM05', 'STF01');
+INSERT INTO Borrows (borrowDate,memberID, staffID)VALUES (TO_DATE('21-04-2025', 'DD-MM-YYYY'),'MEM11', 'STF01');

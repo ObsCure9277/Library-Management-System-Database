@@ -1,0 +1,94 @@
+CREATE OR REPLACE PROCEDURE sp_books_report(p_genre IN VARCHAR2) IS
+  -- Outer cursor: Filtered by genre
+  CURSOR cur_books IS
+    SELECT b.ISBN, b.bookName, b.publicationDate, b.genre, b.author, b.popularity,
+           p.publisherName, p.publisherEmail
+    FROM Books b
+    JOIN Publishers p ON b.publisherID = p.publisherID
+    WHERE LOWER(b.genre) = LOWER(p_genre)
+    ORDER BY b.popularity DESC NULLS LAST;
+
+  -- Inner cursor: Book copies for each book
+  CURSOR cur_book_copys(p_ISBN CHAR) IS
+    SELECT bookCopyID, bookCopyStatus
+    FROM BookCopys
+    WHERE ISBN = p_ISBN
+    ORDER BY bookCopyID;
+
+  -- Variables for outer cursor
+  v_ISBN           CHAR(13);
+  v_bookName       VARCHAR(50);
+  v_pubDate        DATE;
+  v_genre          VARCHAR(50);
+  v_author         VARCHAR(50);
+  v_popularity     INTEGER;
+  v_publisherName  VARCHAR(50);
+  v_publisherEmail VARCHAR(50);
+
+  -- Variables for inner cursor
+  v_copyID     CHAR(5);
+  v_copyStatus VARCHAR(50);
+
+  -- Summary counters
+  v_totalBooks       NUMBER := 0;
+  v_totalCopies      NUMBER := 0;
+  v_totalAvailable   NUMBER := 0;
+
+BEGIN
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', 110, '='));
+  DBMS_OUTPUT.PUT_LINE('             Filtered Book Report by Genre: ' || UPPER(p_genre));
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', 110, '='));
+
+  FOR book_rec IN cur_books LOOP
+    v_totalBooks := v_totalBooks + 1;
+
+    v_ISBN := book_rec.ISBN;
+    v_bookName := book_rec.bookName;
+    v_pubDate := book_rec.publicationDate;
+    v_genre := book_rec.genre;
+    v_author := book_rec.author;
+    v_popularity := book_rec.popularity;
+    v_publisherName := book_rec.publisherName;
+    v_publisherEmail := book_rec.publisherEmail;
+
+    DBMS_OUTPUT.PUT_LINE(CHR(10) || 'Book Title   : ' || v_bookName);
+    DBMS_OUTPUT.PUT_LINE('Author       : ' || v_author);
+    DBMS_OUTPUT.PUT_LINE('Genre        : ' || v_genre);
+    DBMS_OUTPUT.PUT_LINE('Publication  : ' || TO_CHAR(v_pubDate, 'YYYY-MM-DD'));
+    DBMS_OUTPUT.PUT_LINE('Popularity   : ' || NVL(v_popularity, 0));
+    DBMS_OUTPUT.PUT_LINE('Publisher    : ' || v_publisherName || ' (' || v_publisherEmail || ')');
+    DBMS_OUTPUT.PUT_LINE(RPAD('-', 110, '-'));
+    DBMS_OUTPUT.PUT_LINE(RPAD('Copy ID', 10) || RPAD('Copy Status', 20));
+    DBMS_OUTPUT.PUT_LINE(RPAD('-', 110, '-'));
+
+    OPEN cur_book_copys(v_ISBN);
+    LOOP
+      FETCH cur_book_copys INTO v_copyID, v_copyStatus;
+      EXIT WHEN cur_book_copys%NOTFOUND;
+
+      v_totalCopies := v_totalCopies + 1;
+      IF v_copyStatus = 'Intact' THEN
+        v_totalAvailable := v_totalAvailable + 1;
+      END IF;
+
+      DBMS_OUTPUT.PUT_LINE(RPAD(v_copyID, 10) || RPAD(v_copyStatus, 20));
+    END LOOP;
+    CLOSE cur_book_copys;
+
+    DBMS_OUTPUT.PUT_LINE(RPAD('=', 110, '='));
+  END LOOP;
+
+  -- Summary Section
+  DBMS_OUTPUT.PUT_LINE(CHR(10));
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', 110, '='));
+  DBMS_OUTPUT.PUT_LINE('Summary:');
+  DBMS_OUTPUT.PUT_LINE('Total Books Matched        : ' || v_totalBooks);
+  DBMS_OUTPUT.PUT_LINE('Total Book Copies Listed   : ' || v_totalCopies);
+  DBMS_OUTPUT.PUT_LINE('Total Available (Intact)   : ' || v_totalAvailable);
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', 110, '='));
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', 40, '=') || ' End of Book Report ' || RPAD('=', 40, '='));
+END;
+/
+
+SET SERVEROUTPUT ON;
+EXEC sp_books_report('Mystery');

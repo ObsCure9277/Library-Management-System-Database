@@ -1,0 +1,79 @@
+DROP PROCEDURE sp_create_reservation;
+DROP SEQUENCE RESERVATION_SEQ;
+
+-- 1) Create Sequence，Start From 151(original res have 150 data)
+CREATE SEQUENCE RESERVATION_SEQ
+  START WITH 151
+  INCREMENT BY 1
+  NOCACHE
+  NOCYCLE;
+
+-- 2) Create reservation procedure 
+CREATE OR REPLACE PROCEDURE sp_create_reservation(
+  p_memberID    IN Reservations.memberID%TYPE,
+  p_bookCopyID  IN ReservationDetails.bookCopyID%TYPE,
+  p_quantity    IN ReservationDetails.quantity%TYPE DEFAULT 1,
+  p_newResvID   OUT Reservations.reservationID%TYPE
+) AS
+  v_seq   NUMBER;
+  v_id    Reservations.reservationID%TYPE;
+  v_date  VARCHAR2(20);
+BEGIN
+  -- 2.1 produce new RS ID
+  v_seq := RESERVATION_SEQ.NEXTVAL;
+  v_id  := 'RS' || LPAD(v_seq, 3, '0');
+
+  -- 2.2 insert table
+  INSERT INTO Reservations(reservationID, reservationDate, memberID)
+    VALUES(v_id, SYSDATE, p_memberID);
+
+  INSERT INTO ReservationDetails(reservationID, bookCopyID, quantity)
+    VALUES(v_id, p_bookCopyID, p_quantity);
+
+  COMMIT;
+
+  p_newResvID := v_id;
+
+  SELECT TO_CHAR(SYSDATE,'YYYY-MM-DD HH24:MI') INTO v_date FROM DUAL;
+
+  -- 2.3 print layout
+  DBMS_OUTPUT.PUT_LINE(LPAD('=', 70, '='));
+  DBMS_OUTPUT.PUT_LINE('           Creating a New Reservation           ');
+  DBMS_OUTPUT.PUT_LINE(LPAD('-', 70, '-'));
+  DBMS_OUTPUT.PUT_LINE(
+    RPAD('ResvID',10)   ||
+    RPAD('Member',10)   ||
+    RPAD('BookCopy',10) ||
+    RPAD('Qty',5)       ||
+    'Date'
+  );
+  DBMS_OUTPUT.PUT_LINE(LPAD('-', 70, '-'));
+  DBMS_OUTPUT.PUT_LINE(
+    RPAD(v_id,10)           ||
+    RPAD(p_memberID,10)     ||
+    RPAD(p_bookCopyID,10)   ||
+    RPAD(p_quantity,5)      ||  
+    v_date
+  );
+  DBMS_OUTPUT.PUT_LINE(LPAD('=', 70, '='));
+EXCEPTION 
+  WHEN OTHERS THEN
+    ROLLBACK;
+    RAISE;
+END sp_create_reservation;
+/
+
+
+
+SET SERVEROUTPUT ON
+
+VARIABLE newID VARCHAR2(5)
+
+EXEC sp_create_reservation(p_memberID   => 'MEM05',p_bookCopyID => 'BC058',p_quantity   => 1,p_newResvID  => :newID);
+
+
+EXEC sp_create_reservation(p_memberID   => 'MEM04',p_bookCopyID => 'BC079',p_quantity   => 1,p_newResvID  => :newID);
+
+EXEC sp_create_reservation(p_memberID   => 'MEM01',p_bookCopyID => 'BC011',p_quantity   => 1,p_newResvID  => :newID);
+
+TTITLE OFF

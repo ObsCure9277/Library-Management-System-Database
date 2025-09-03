@@ -1,0 +1,91 @@
+-- 1) OPTIONAL: an audit table to record every status change
+DROP TABLE MemberStatusAudit CASCADE CONSTRAINTS;
+
+CREATE TABLE MemberStatusAudit (
+  auditID        NUMBER        PRIMARY KEY,
+  memberID       CHAR(5)       NOT NULL,
+  oldStatus      VARCHAR2(20)  NOT NULL,
+  newStatus      VARCHAR2(20)  NOT NULL,
+  changeDate     DATE          DEFAULT SYSDATE
+);
+
+-- 2) EXTRA: a sequence to populate auditID
+DROP SEQUENCE member_status_audit_seq;
+
+CREATE SEQUENCE member_status_audit_seq
+  START WITH 1
+  INCREMENT BY 1
+  NOCACHE
+  NOCYCLE;
+
+
+-- 3) EXTRA: an index to speed up queries by expiryDate
+DROP INDEX idx_members_expiry;
+
+CREATE INDEX idx_members_expiry
+  ON Members(expiryDate);
+
+DROP INDEX idx_members_upper_status;
+
+CREATE INDEX idx_members_upper_status
+  ON members（UPPER（membershipStatus））;
+
+---Trigger 1 start here
+
+CREATE OR REPLACE FUNCTION fn_is_expired(p_expiryDate IN DATE)
+  RETURN BOOLEAN
+IS
+BEGIN
+  RETURN (p_expiryDate < TRUNC(SYSDATE));
+END fn_is_expired;
+/
+
+CREATE OR REPLACE TRIGGER trg_auto_expire_member
+  BEFORE INSERT OR UPDATE
+  ON Members
+  FOR EACH ROW
+DECLARE
+  ex_bad_status EXCEPTION;
+BEGIN
+  -- 6.1: Enforce expiryDate not null
+  IF :NEW.expiryDate IS NULL THEN
+    RAISE_APPLICATION_ERROR(-20050, 'expiryDate cannot be NULL');
+  END IF;
+
+  -- 6.2: Assign correct membershipStatus based on expiryDate
+  IF fn_is_expired(:NEW.expiryDate) THEN
+    :NEW.membershipStatus := 'Disable';
+  ELSE
+    :NEW.membershipStatus := 'Active';
+  END IF;
+
+  -- 6.3: Validate allowed values
+  IF :NEW.membershipStatus NOT IN ('Active', 'Disable') THEN
+    RAISE ex_bad_status;
+  END IF;
+
+  -- 6.4: Log into audit table
+  INSERT INTO MemberStatusAudit(auditID, memberID, oldStatus, newStatus)
+  VALUES (
+    member_status_audit_seq.NEXTVAL,
+    :NEW.memberID,
+    NVL(:OLD.membershipStatus, '<none>'),
+    :NEW.membershipStatus
+  );
+
+EXCEPTION
+  WHEN ex_bad_status THEN
+    RAISE_APPLICATION_ERROR(
+      -20051,
+      'Invalid membershipStatus ''' || :NEW.membershipStatus || ''' for ' || :NEW.memberID
+    );
+END trg_auto_expire_member;
+/
+
+
+
+INSERT INTO Members VALUES ('MT001', 'Wong Jenn', 'wjenn@email.com', 'Disable', TO_DATE('02-09-2025', 'DD-MM-YYYY'), 'stephiverson');
+INSERT INTO Members VALUES ('MT002', 'Wong Tiam', 'wongti@email.com', 'Active', TO_DATE('02-04-2025', 'DD-MM-YYYY'), 'stephiverson');
+select  * from members where memberid='MT001';
+select  * from members where memberid='MT002';
+select * from MemberStatusAudit;

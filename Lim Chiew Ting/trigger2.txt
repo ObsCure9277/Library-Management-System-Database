@@ -1,0 +1,73 @@
+CREATE OR REPLACE TRIGGER Insert_Fine_After_Late_Return
+AFTER UPDATE OF returnDate ON BorrowDetails
+FOR EACH ROW
+DECLARE
+    v_dueDate DATE;
+    v_daysLate NUMBER;
+    v_fineAmount NUMBER;
+    v_lastFineID VARCHAR2(10);
+    v_newFineID VARCHAR2(10);
+    v_numericPart NUMBER;
+BEGIN
+    -- Get dueDate from Borrows table using borrowID
+    SELECT dueDate INTO v_dueDate
+    FROM Borrows
+    WHERE borrowID = :NEW.borrowID;
+
+    -- Check if returnDate is late
+    IF :NEW.returnDate > v_dueDate THEN
+        v_daysLate := :NEW.returnDate - v_dueDate;
+
+        -- Fine logic
+        IF v_daysLate BETWEEN 1 AND 3 THEN
+            v_fineAmount := 10;
+        ELSIF v_daysLate BETWEEN 4 AND 7 THEN
+            v_fineAmount := 30;
+        ELSIF v_daysLate >= 10 THEN
+            v_fineAmount := 50;
+        ELSE
+            v_fineAmount := 0;
+        END IF;
+
+        -- Insert if fine > 0
+        IF v_fineAmount > 0 THEN
+            -- Generate new fine ID
+            SELECT MAX(fineID) INTO v_lastFineID FROM Fines;
+            IF v_lastFineID IS NULL THEN
+                v_newFineID := 'FN001';
+            ELSE
+                v_numericPart := TO_NUMBER(SUBSTR(v_lastFineID, 3)) + 1;
+                v_newFineID := 'FN' || LPAD(v_numericPart, 3, '0');
+            END IF;
+
+            -- Insert fine
+            INSERT INTO Fines (fineID, borrowID, bookCopyID, amount, fineStatus)
+            VALUES (
+                v_newFineID,
+                :NEW.borrowID,
+                :NEW.bookCopyID,
+                v_fineAmount,
+                'Unpaid'
+            );
+
+            -- Neat table output
+            DBMS_OUTPUT.PUT_LINE('-------------------------------------------------------------');
+            DBMS_OUTPUT.PUT_LINE(RPAD('FineID', 10) || RPAD('BorrowID', 12) || RPAD('BookCopyID', 14) || RPAD('Amount(RM)', 12) || 'Status');
+            DBMS_OUTPUT.PUT_LINE('-------------------------------------------------------------');
+            DBMS_OUTPUT.PUT_LINE(RPAD(v_newFineID, 10) || RPAD(:NEW.borrowID, 12) || RPAD(:NEW.bookCopyID, 14) || RPAD(v_fineAmount, 12) || 'Unpaid');
+            DBMS_OUTPUT.PUT_LINE('-------------------------------------------------------------');
+        END IF;
+    END IF;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RAISE_APPLICATION_ERROR(-20010, 'Borrow ID not found.');
+    WHEN OTHERS THEN
+        RAISE_APPLICATION_ERROR(-20011, 'Unexpected error: ' || SQLERRM);
+END;
+/
+
+--Sample Insert Data
+UPDATE BorrowDetails
+SET returnDate = TO_DATE('01-02-2024', 'DD-MM-YYYY')
+WHERE borrowID IN ('BR147', 'BR148', 'BR149');

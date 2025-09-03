@@ -1,0 +1,38 @@
+CREATE OR REPLACE VIEW StaffAttendanceSummaryView AS
+SELECT
+  st.staffID                                      AS StaffID,
+  st.staffName                                    AS StaffName,
+  COUNT(a.attendanceID)                           AS SessionCount,        
+  SUM(ROUND((CAST(a.endTime AS DATE) 
+           - CAST(a.startTime AS DATE)) * 24, 2)) AS TotalWorkHours     
+FROM
+  Attendance a
+  JOIN Schedules s ON a.scheduleID = s.scheduleID
+  JOIN Staffs    st ON s.staffID    = st.staffID
+GROUP BY
+  st.staffID,
+  st.staffName
+;  
+
+SET LINESIZE 100
+SET PAGESIZE 50
+ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI';
+
+COLUMN StaffID        FORMAT A6   HEADING 'Staff'
+COLUMN StaffName      FORMAT A20  HEADING 'Name' WORD_WRAPPED
+COLUMN SessionCount   FORMAT 999   HEADING 'Sessions'
+COLUMN TotalWorkHours FORMAT 999.99 HEADING 'Hours'
+
+TTITLE CENTER 'Staff Attendance Summary Report' SKIP 1
+
+SELECT
+  StaffID,
+  StaffName,
+  SessionCount,
+  TotalWorkHours
+FROM
+  StaffAttendanceSummaryView
+ORDER BY
+  TotalWorkHours desc;    
+
+TTITLE OFF

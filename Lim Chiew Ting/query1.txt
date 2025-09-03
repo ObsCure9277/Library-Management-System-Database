@@ -1,0 +1,74 @@
+CREATE OR REPLACE VIEW BookBorrowAndReserveView AS
+SELECT 
+    BK.ISBN,
+    BK.bookName,
+    BK.genre,
+    BK.author,
+    NVL(BorrowStats.borrowCount, 0) + NVL(ReserveStats.reserveCount, 0) AS totalActivity,
+    NVL(CopyStats.totalCopies, 0) AS totalCopies
+FROM 
+    Books BK
+LEFT JOIN (
+    SELECT 
+        BC.ISBN,
+        COUNT(*) AS borrowCount
+    FROM 
+        BorrowDetails BD
+    JOIN 
+        BookCopys BC ON BD.bookCopyID = BC.bookCopyID
+    GROUP BY 
+        BC.ISBN
+) BorrowStats ON BK.ISBN = BorrowStats.ISBN
+LEFT JOIN (
+    SELECT 
+        BC.ISBN,
+        COUNT(*) AS reserveCount
+    FROM 
+        ReservationDetails RD
+    JOIN 
+        BookCopys BC ON RD.bookCopyID = BC.bookCopyID
+    GROUP BY 
+        BC.ISBN
+) ReserveStats ON BK.ISBN = ReserveStats.ISBN
+LEFT JOIN (
+    SELECT 
+        ISBN,
+        COUNT(*) AS totalCopies
+    FROM 
+        BookCopys
+    GROUP BY 
+        ISBN
+) CopyStats ON BK.ISBN = CopyStats.ISBN
+ORDER BY 
+    totalActivity DESC,
+    genre ASC
+FETCH FIRST 50 ROWS ONLY;
+
+SET linesize 150
+SET pagesize 150
+
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD-MM-YYYY';
+COLUMN ISBN FORMAT A15
+COLUMN bookName FORMAT A45
+COLUMN genre FORMAT A20
+COLUMN author FORMAT A20
+COLUMN totalActivity HEADING 'Total Activity'
+COLUMN totalCopies HEADING 'Total Copies'
+
+TTITLE CENTER "Top 50 Most Popular Books by Borrows N Reservations" SKIP 2
+
+SELECT
+     ISBN,
+     bookName,
+     genre,
+     author,
+     totalActivity,
+     totalCopies
+FROM
+     BookBorrowAndReserveView
+ORDER BY 
+     totalActivity DESC,
+     bookName ASC,
+     genre ASC;
+
+TTITLE OFF

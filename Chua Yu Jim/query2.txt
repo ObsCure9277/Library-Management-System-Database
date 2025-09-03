@@ -1,0 +1,55 @@
+CREATE OR REPLACE VIEW DamagedCopyUtilizationView AS
+SELECT
+  bc.bookCopyID                               AS CopyID,
+  SUBSTR(b.bookName,1,30)                     AS Title,
+  b.genre                                     AS Genre,
+  SUBSTR(b.author,1,15)                       AS Author,
+  ROUND(AVG(bd.returnDate - bo.borrowDate), 2) AS AvgDays,  -- Corrected: ReturnDate - BorrowDate
+  COUNT(DISTINCT bo.memberID)                 AS Borrowers
+FROM BookCopys bc
+JOIN Books b          ON bc.ISBN        = b.ISBN
+JOIN BorrowDetails bd ON bc.bookCopyID = bd.bookCopyID
+JOIN Borrows bo       ON bd.borrowID    = bo.borrowID
+LEFT JOIN Fines f     ON bo.borrowID    = f.borrowID
+                      AND bc.bookCopyID = f.bookCopyID
+WHERE bc.bookCopyStatus = 'Damage'
+  AND bd.returnDate IS NOT NULL
+GROUP BY
+  bc.bookCopyID,
+  SUBSTR(b.bookName,1,30),
+  b.genre,
+  SUBSTR(b.author,1,15);
+
+
+SET LINESIZE 150
+SET PAGESIZE 100
+ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY‑MM‑DD';
+
+COLUMN CopyID      FORMAT A8     HEADING 'Copy ID'
+COLUMN Title       FORMAT A30    HEADING 'Title' WORD_WRAPPED
+COLUMN Genre       FORMAT A12    HEADING 'Genre'
+COLUMN Author      FORMAT A15    HEADING 'Author'
+COLUMN AvgDays     FORMAT 999.99 HEADING 'AvgDays'
+COLUMN Borrowers   FORMAT 999    HEADING 'Borrowers'
+
+TTITLE CENTER 'Comprehensive Damaged Copy Utilization Report' SKIP 2
+
+SELECT
+  CopyID,
+  Title,
+  Genre,
+  Author,
+  AvgDays,
+  Borrowers
+FROM
+  DamagedCopyUtilizationView
+ORDER BY
+  AvgDays desc;
+;
+
+TTITLE OFF
+
+--calculate days prove
+ select * from borrowdetails where bookcopyid ='BC013';
+ select * from borrows where borrowid = 'BR005';
+ select * from borrows where borrowid = 'BR059';

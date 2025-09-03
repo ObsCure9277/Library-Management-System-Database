@@ -1,0 +1,79 @@
+SET SERVEROUTPUT ON;
+SET LINESIZE 200;
+SET PAGESIZE 40;
+
+DECLARE
+    CURSOR cur_year IS
+        SELECT DISTINCT EXTRACT(YEAR FROM borrowDate) AS year
+        FROM Borrows
+        ORDER BY year;
+
+    CURSOR cur_staff(p_year NUMBER) IS
+        SELECT s.staffID, s.staffName
+        FROM Staffs s
+        JOIN Borrows b ON s.staffID = b.staffID
+        WHERE EXTRACT(YEAR FROM b.borrowDate) = p_year
+        GROUP BY s.staffID, s.staffName
+        ORDER BY s.staffID;
+
+    CURSOR cur_member(p_staffID Staffs.staffID%TYPE, p_year NUMBER) IS
+        SELECT DISTINCT m.memberID || ' - ' || m.memberName AS member_info
+        FROM Borrows b
+        JOIN Members m ON b.memberID = m.memberID
+        WHERE b.staffID = p_staffID
+          AND EXTRACT(YEAR FROM b.borrowDate) = p_year;
+
+    v_total_borrows NUMBER;
+    v_yearly_total NUMBER;
+BEGIN
+    DBMS_OUTPUT.PUT_LINE(RPAD('=', 150, '='));
+    DBMS_OUTPUT.PUT_LINE(LPAD('STAFF YEARLY BORROWING ACTIVITY SUMMARY REPORT', 100));
+    DBMS_OUTPUT.PUT_LINE(RPAD('=', 150, '='));
+
+    FOR rec_year IN cur_year LOOP
+        v_yearly_total := 0;
+
+        DBMS_OUTPUT.PUT_LINE(CHR(10) || 'YEAR: ' || rec_year.year);
+        DBMS_OUTPUT.PUT_LINE(RPAD('-', 150, '-'));
+        DBMS_OUTPUT.PUT_LINE(RPAD('Staff ID', 12) || RPAD('Staff Name', 40) || RPAD('Total Borrows', 18) || 'Assisted Members');
+        DBMS_OUTPUT.PUT_LINE(RPAD('-', 150, '-'));
+
+        FOR rec_staff IN cur_staff(rec_year.year) LOOP
+            -- Count borrows by staff for the specific year
+            SELECT COUNT(*) INTO v_total_borrows
+            FROM Borrows
+            WHERE staffID = rec_staff.staffID
+              AND EXTRACT(YEAR FROM borrowDate) = rec_year.year;
+
+            v_yearly_total := v_yearly_total + v_total_borrows;
+
+            -- Get assisted members in one row
+            DECLARE
+                v_members VARCHAR2(1000) := '';
+            BEGIN
+                FOR rec_member IN cur_member(rec_staff.staffID, rec_year.year) LOOP
+                    v_members := v_members || rec_member.member_info || ', ';
+                END LOOP;
+
+                -- Trim trailing comma
+                IF LENGTH(v_members) > 2 THEN
+                    v_members := SUBSTR(v_members, 1, LENGTH(v_members) - 2);
+                END IF;
+
+                DBMS_OUTPUT.PUT_LINE(RPAD(rec_staff.staffID, 12) ||
+                                     RPAD(rec_staff.staffName, 40) ||
+                                     RPAD(v_total_borrows, 18) ||
+                                     v_members);
+            END;
+        END LOOP;
+
+        DBMS_OUTPUT.PUT_LINE(RPAD('-', 150, '-'));
+        DBMS_OUTPUT.PUT_LINE('TOTAL BORROWS FOR YEAR ' || rec_year.year || ': ' || v_yearly_total);
+        DBMS_OUTPUT.PUT_LINE(RPAD('=', 150, '='));
+    END LOOP;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Unexpected error: ' || SQLERRM);
+END;
+/

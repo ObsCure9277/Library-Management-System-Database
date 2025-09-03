@@ -1,0 +1,162 @@
+SET SERVEROUTPUT ON;
+SET LINESIZE 150;
+SET PAGESIZE 50;
+
+-- Speeds up yearly filtering
+CREATE INDEX idx_borrow_year ON Borrows(EXTRACT(YEAR FROM borrowDate));
+
+-- For join and filter by memberID and borrowDate
+CREATE INDEX idx_borrows_member_date ON Borrows(memberID, borrowDate);
+
+-- For faster lookup in BorrowDetails by bookCopyID and returnDate
+CREATE INDEX idx_borrowdetails_copy_return ON BorrowDetails(bookCopyID, returnDate);
+
+-- For joining Borrows and BorrowDetails
+CREATE INDEX idx_borrowdetails_borrowid ON BorrowDetails(borrowID);
+
+-- For joining BookCopys to Books
+CREATE INDEX idx_bookcopys_isbn ON BookCopys(ISBN);
+
+
+DECLARE
+    CURSOR cur_members IS
+        SELECT memberID, memberName, expiryDate FROM Members;
+
+    CURSOR cur_years IS
+        SELECT DISTINCT EXTRACT(YEAR FROM borrowDate) AS year FROM Borrows ORDER BY 1;
+
+    v_memberID      Members.memberID%TYPE;
+    v_memberName    Members.memberName%TYPE;
+    v_expiryDate    Members.expiryDate%TYPE;
+    v_totalBorrowed NUMBER;
+    v_lateCount     NUMBER;
+    v_topGenre      VARCHAR2(50);
+    v_line_width    NUMBER := 150;
+    v_seq_id        NUMBER := 0;
+
+    -- For yearly summary
+    v_year              NUMBER;
+    v_yearBorrowCount   NUMBER;
+    v_yearLateCount     NUMBER;
+    v_topMonth          VARCHAR2(15);
+    v_topBorrowerName   VARCHAR2(50);
+    v_topLateName       VARCHAR2(50);
+
+BEGIN
+    -- Main Header
+    DBMS_OUTPUT.PUT_LINE(LPAD('=', v_line_width, '='));
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD(LPAD('Member Borrow Summary Report', (v_line_width - 2 + LENGTH('Member Borrow Summary Report')) / 2), v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE(LPAD('=', v_line_width, '='));
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('No.', 5) || '|' || RPAD('Member Name', 25) || '|' || RPAD('Expiry Date', 15) ||
+                         '|' || RPAD('Total Borrowed', 18) || '|' || RPAD('Late Return Count', 20) || '|' || RPAD('Top Genre', 60) || '|');
+    DBMS_OUTPUT.PUT_LINE(LPAD('-', v_line_width, '-'));
+
+    FOR rec IN cur_members LOOP
+        BEGIN
+            v_seq_id := v_seq_id + 1;
+            v_memberID := rec.memberID;
+            v_memberName := rec.memberName;
+            v_expiryDate := rec.expiryDate;
+
+            -- Total Borrowed
+            BEGIN
+                SELECT COUNT(*) INTO v_totalBorrowed
+                FROM Borrows b JOIN BorrowDetails bd ON b.borrowID = bd.borrowID
+                WHERE b.memberID = v_memberID;
+            EXCEPTION WHEN NO_DATA_FOUND THEN v_totalBorrowed := 0;
+            END;
+
+            -- Late Count
+            BEGIN
+                SELECT COUNT(*) INTO v_lateCount
+                FROM Borrows b JOIN BorrowDetails bd ON b.borrowID = bd.borrowID
+                WHERE b.memberID = v_memberID AND bd.returnDate > b.dueDate;
+            EXCEPTION WHEN NO_DATA_FOUND THEN v_lateCount := 0;
+            END;
+
+            -- Top Genre
+            BEGIN
+                SELECT genre INTO v_topGenre
+                FROM (
+                    SELECT bo.genre, COUNT(*) AS cnt
+                    FROM Borrows b
+                    JOIN BorrowDetails bd ON b.borrowID = bd.borrowID
+                    JOIN BookCopys bc ON bd.bookCopyID = bc.bookCopyID
+                    JOIN Books bo ON bc.ISBN = bo.ISBN
+                    WHERE b.memberID = v_memberID
+                    GROUP BY bo.genre
+                    ORDER BY cnt DESC
+                ) WHERE ROWNUM = 1;
+            EXCEPTION WHEN NO_DATA_FOUND THEN v_topGenre := 'N/A';
+            END;
+
+            DBMS_OUTPUT.PUT_LINE('|' || RPAD(v_seq_id, 5) ||
+                                 '|' || RPAD(v_memberName, 25) ||
+                                 '|' || RPAD(TO_CHAR(v_expiryDate, 'DD-MM-YYYY'), 15) ||
+                                 '|' || RPAD(NVL(v_totalBorrowed, 0), 18) ||
+                                 '|' || RPAD(NVL(v_lateCount, 0), 20) ||
+                                 '|' || RPAD(v_topGenre, 60) || '|');
+        EXCEPTION
+            WHEN OTHERS THEN
+                DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Error processing member: ' || rec.memberID, v_line_width - 2) || '|');
+        END;
+    END LOOP;
+
+    DBMS_OUTPUT.PUT_LINE(LPAD('=', v_line_width, '='));
+    DBMS_OUTPUT.PUT_LINE(RPAD('Yearly Summary:', v_line_width, ' '));
+    DBMS_OUTPUT.PUT_LINE(LPAD('-', v_line_width, '-'));
+
+    FOR year_rec IN cur_years LOOP
+        v_year := year_rec.year;
+
+        -- Total borrows in year
+        SELECT COUNT(*) INTO v_yearBorrowCount
+        FROM Borrows b JOIN BorrowDetails bd ON b.borrowID = bd.borrowID
+        WHERE EXTRACT(YEAR FROM b.borrowDate) = v_year;
+
+        -- Total late returns in year
+        SELECT COUNT(*) INTO v_yearLateCount
+        FROM Borrows b JOIN BorrowDetails bd ON b.borrowID = bd.borrowID
+        WHERE EXTRACT(YEAR FROM b.borrowDate) = v_year AND bd.returnDate > b.dueDate;
+
+        -- Month with most borrows
+        SELECT mon INTO v_topMonth
+FROM (
+    SELECT TO_CHAR(borrowDate, 'Month') AS mon, COUNT(*) AS cnt
+    FROM Borrows
+    WHERE EXTRACT(YEAR FROM borrowDate) = v_year
+    GROUP BY TO_CHAR(borrowDate, 'Month')
+    ORDER BY cnt DESC
+)
+WHERE ROWNUM = 1;
+
+        -- Top Borrower
+        SELECT m.memberName INTO v_topBorrowerName
+        FROM Borrows b
+        JOIN Members m ON b.memberID = m.memberID
+        WHERE EXTRACT(YEAR FROM b.borrowDate) = v_year
+        GROUP BY m.memberName
+        ORDER BY COUNT(*) DESC FETCH FIRST 1 ROWS ONLY;
+
+        -- Top Late Returner
+        SELECT m.memberName INTO v_topLateName
+        FROM Borrows b
+        JOIN BorrowDetails bd ON b.borrowID = bd.borrowID
+        JOIN Members m ON b.memberID = m.memberID
+        WHERE EXTRACT(YEAR FROM b.borrowDate) = v_year AND bd.returnDate > b.dueDate
+        GROUP BY m.memberName
+        ORDER BY COUNT(*) DESC FETCH FIRST 1 ROWS ONLY;
+
+        -- Output the yearly summary
+        DBMS_OUTPUT.PUT_LINE('Year: ' || v_year);
+        DBMS_OUTPUT.PUT_LINE('Total Borrowed: ' || v_yearBorrowCount);
+        DBMS_OUTPUT.PUT_LINE('Total Late Returns: ' || v_yearLateCount);
+        DBMS_OUTPUT.PUT_LINE('Most Borrowed Month: ' || RTRIM(v_topMonth));
+        DBMS_OUTPUT.PUT_LINE('Top Borrower: ' || v_topBorrowerName);
+        DBMS_OUTPUT.PUT_LINE('Most Late Returner: ' || v_topLateName);
+        DBMS_OUTPUT.PUT_LINE(LPAD('-', v_line_width, '-'));
+    END LOOP;
+
+    DBMS_OUTPUT.PUT_LINE(LPAD('=', v_line_width, '='));
+END;
+/
