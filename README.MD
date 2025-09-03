@@ -4,7 +4,7 @@ BACS3183 Group Assignment, Group 01, January Semester 2025.
 
 ### Project Name
 
-Library Management System
+Library Management System Database
 
 ### Group Members
 
