@@ -1,0 +1,19 @@
+CREATE OR REPLACE TRIGGER PreventBorrowingIfUnpaidFines
+BEFORE INSERT ON Borrows
+FOR EACH ROW
+DECLARE
+  v_unpaid_fines_count NUMBER;
+BEGIN
+  SELECT COUNT(*) 
+  INTO v_unpaid_fines_count
+  FROM Fines
+  WHERE fineStatus = 'Unpaid'
+    AND borrowID IN (SELECT borrowID FROM Borrows WHERE memberID = :NEW.memberID);
+  
+  IF v_unpaid_fines_count > 0 THEN
+    RAISE_APPLICATION_ERROR(-20001, 'Member has unpaid fines. Borrowing is not allowed.');
+  END IF;
+END;
+/ 
+
+INSERT INTO Borrows VALUES ('BR001', TO_DATE('05-01-2023', 'DD-MM-YYYY'), TO_DATE('19-01-2023', 'DD-MM-YYYY'), 'MEM06', 'STF01');

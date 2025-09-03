@@ -1,0 +1,60 @@
+SET SERVEROUTPUT ON;
+
+CREATE OR REPLACE PROCEDURE AddNewStaff (
+    p_staffName   IN Staffs.staffName%TYPE,
+    p_staffEmail  IN Staffs.staffEmail%TYPE,
+    p_password    IN Staffs.password%TYPE
+)
+IS
+    v_count INTEGER;
+    email_exists EXCEPTION;
+    v_staffID VARCHAR2(10); 
+    v_maxID   NUMBER;
+
+BEGIN
+    SELECT COUNT(*) INTO v_count
+    FROM Staffs
+    WHERE staffEmail = p_staffEmail;
+
+    IF v_count > 0 THEN
+        RAISE email_exists;
+    END IF;
+
+    -- Get the current highest staffID (ignoring the 'STF' prefix) and increment by 1
+    SELECT MAX(TO_NUMBER(SUBSTR(staffID, 4))) INTO v_maxID
+    FROM Staffs
+    WHERE staffID LIKE 'STF%';
+
+    -- If no staff IDs exist, start from 1
+    IF v_maxID IS NULL THEN
+        v_maxID := 10;
+    ELSE
+        v_maxID := v_maxID + 1;
+    END IF;
+
+    -- Generate the staffID using the incremented number
+    v_staffID := 'STF' || TO_CHAR(v_maxID);
+
+    INSERT INTO Staffs (staffID, staffName, staffEmail, password)
+    VALUES (v_staffID, p_staffName, p_staffEmail, p_password);
+
+    DBMS_OUTPUT.PUT_LINE('Staff added successfully.');
+    DBMS_OUTPUT.PUT_LINE('Generated Staff ID: ' || v_staffID);
+
+EXCEPTION
+    WHEN email_exists THEN
+        DBMS_OUTPUT.PUT_LINE('Error: Staff email already exists.');
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Unexpected error: ' || SQLERRM);
+END;
+/
+
+BEGIN
+    AddNewStaff(
+        p_staffName  => 'Ali',
+        p_staffEmail => 'aisyah@pawfect.com',
+        p_password   => 'aisyah12345'
+    );
+END;
+/
+Select * FROM Staffs WHERE staffID = 'STF11';

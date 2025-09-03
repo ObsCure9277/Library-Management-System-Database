@@ -1,0 +1,85 @@
+CREATE INDEX idx_books_publisherid ON Books(UPPER(publisherID));
+CREATE INDEX idx_publishers_publisherid ON Publishers(UPPER(publisherID));
+CREATE INDEX idx_books_popularity ON Books(UPPER(popularity));
+
+DROP SEQUENCE seq_publisher_no;
+CREATE SEQUENCE seq_publisher_no
+START WITH 1
+INCREMENT BY 1
+NOCACHE
+NOCYCLE;
+
+CREATE OR REPLACE FUNCTION GetAvgPopularity(p_pubID IN VARCHAR2)
+RETURN NUMBER
+IS
+    v_avg NUMBER;
+BEGIN
+    SELECT ROUND(AVG(popularity), 2)
+    INTO v_avg
+    FROM Books
+    WHERE publisherID = p_pubID;
+
+    RETURN v_avg;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RETURN NULL;
+    WHEN OTHERS THEN
+        RETURN NULL;
+END;
+/
+
+CREATE OR REPLACE VIEW PublisherBookPopularity AS
+WITH MaxPopularity AS (
+  SELECT publisherID, MAX(popularity) AS max_pop
+  FROM Books
+  GROUP BY publisherID
+),
+MostPopularBooks AS (
+  SELECT b.publisherID, b.bookName
+  FROM Books b
+  JOIN MaxPopularity mp 
+    ON b.publisherID = mp.publisherID AND b.popularity = mp.max_pop
+),
+FinalPopularBooks AS (
+  SELECT publisherID, MIN(bookName) AS most_popular_book
+  FROM MostPopularBooks
+  GROUP BY publisherID
+)
+SELECT 
+  p.publisherName,
+  f.most_popular_book,
+  GetAvgPopularity(p.publisherID) AS avg_popularity
+FROM Publishers p
+JOIN FinalPopularBooks f ON p.publisherID = f.publisherID;
+
+
+SET LINESIZE 85
+SET PAGESIZE 200
+SET UNDERLINE =
+SET COLSEP ' | '
+
+TTITLE CENTER 'Average Popularity of Books by Publisher' SKIP 1 -
+CENTER ========================================== SKIP 2
+
+COLUMN no                 FORMAT A3   HEADING 'No' JUSTIFY LEFT
+COLUMN publisherName      FORMAT A16  HEADING 'Publisher Name'
+COLUMN most_popular_book  FORMAT A38  HEADING 'Most Popular Book'
+COLUMN avg_popularity     FORMAT 999  HEADING 'Average Popularity'
+
+SELECT 
+    TO_CHAR(seq_publisher_no.NEXTVAL) AS no,
+    publisherName,
+    most_popular_book,
+    avg_popularity
+FROM (
+    SELECT 
+        publisherName,
+        most_popular_book,
+        avg_popularity
+    FROM PublisherBookPopularity
+    ORDER BY avg_popularity DESC
+);
+
+CLEAR COLUMNS
+TTITLE OFF
+

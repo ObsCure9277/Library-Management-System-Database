@@ -1,0 +1,107 @@
+SET SERVEROUTPUT ON;
+SET LINESIZE 100;
+SET PAGESIZE 50;
+
+CREATE OR REPLACE PROCEDURE PublisherPerformanceReport
+IS
+  -- Cursor for detailed summary per publisher
+  CURSOR cur_summary IS
+    SELECT 
+      p.publisherID,
+      p.publisherName,
+      COUNT(DISTINCT b.ISBN) AS totalBooks,
+      NVL(SUM(b.popularity), 0) AS totalPopularity,
+      NVL(COUNT(DISTINCT brd.bookCopyID), 0) AS totalBorrows,
+      NVL(COUNT(DISTINCT rd.bookCopyID), 0) AS totalReservations
+    FROM 
+      Publishers p
+      LEFT JOIN Books b ON p.publisherID = b.publisherID
+      LEFT JOIN BookCopys bc ON b.ISBN = bc.ISBN
+      LEFT JOIN BorrowDetails brd ON bc.bookCopyID = brd.bookCopyID
+      LEFT JOIN ReservationDetails rd ON bc.bookCopyID = rd.bookCopyID
+    GROUP BY 
+      p.publisherID, p.publisherName;
+
+  -- Cursor for overall totals
+  CURSOR cur_totals IS
+    SELECT 
+      COUNT(DISTINCT p.publisherID) AS publisherCount,
+      COUNT(DISTINCT b.ISBN) AS totalBooks,
+      NVL(SUM(b.popularity), 0) AS totalPopularity,
+      NVL(COUNT(DISTINCT brd.bookCopyID), 0) AS totalBorrows,
+      NVL(COUNT(DISTINCT rd.bookCopyID), 0) AS totalReservations
+    FROM 
+      Publishers p
+      LEFT JOIN Books b ON p.publisherID = b.publisherID
+      LEFT JOIN BookCopys bc ON b.ISBN = bc.ISBN
+      LEFT JOIN BorrowDetails brd ON bc.bookCopyID = brd.bookCopyID
+      LEFT JOIN ReservationDetails rd ON bc.bookCopyID = rd.bookCopyID;
+
+  v_publisherID         Publishers.publisherID%TYPE;
+  v_publisherName       Publishers.publisherName%TYPE;
+  v_totalBooks          NUMBER;
+  v_totalPopularity     NUMBER;
+  v_totalBorrows        NUMBER;
+  v_totalReservations   NUMBER;
+
+  v_publisherCount      NUMBER;
+  v_sumBooks            NUMBER;
+  v_sumPopularity       NUMBER;
+  v_sumBorrows          NUMBER;
+  v_sumReservations     NUMBER;
+
+  v_line_width   NUMBER := 92;
+
+BEGIN
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', v_line_width, '='));
+  DBMS_OUTPUT.PUT_LINE('|' || RPAD(LPAD('PUBLISHER PERFORMANCE REPORT', (v_line_width - 2 + LENGTH('PUBLISHER PERFORMANCE REPORT')) / 2), v_line_width - 2) || '|');
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', v_line_width, '='));
+
+  DBMS_OUTPUT.PUT_LINE('|>> Publisher Summary' || RPAD(' ', v_line_width - 22) || '|');
+  DBMS_OUTPUT.PUT_LINE(RPAD('-', v_line_width, '-'));
+  DBMS_OUTPUT.PUT_LINE('| Publisher ID  | Publisher Name         |  Books | Popularity |  Borrows |  Reservations  |');
+  DBMS_OUTPUT.PUT_LINE(RPAD('-', v_line_width, '-'));
+
+  OPEN cur_summary;
+  LOOP
+    FETCH cur_summary INTO v_publisherID, v_publisherName, v_totalBooks, v_totalPopularity, v_totalBorrows, v_totalReservations;
+    EXIT WHEN cur_summary%NOTFOUND;
+
+    DBMS_OUTPUT.PUT_LINE(
+      '| ' || RPAD(v_publisherID, 13) || ' | ' ||
+      RPAD(SUBSTR(v_publisherName, 1, 22), 22) || ' | ' ||
+      LPAD(v_totalBooks, 6) || ' | ' ||
+      LPAD(v_totalPopularity, 10) || ' | ' ||
+      LPAD(v_totalBorrows, 8) || ' | ' ||
+      LPAD(v_totalReservations, 14) || ' |'
+    );
+  END LOOP;
+  CLOSE cur_summary;
+
+  DBMS_OUTPUT.PUT_LINE(RPAD('-', v_line_width, '-'));
+  DBMS_OUTPUT.PUT_LINE('|>> Overall Summary' || RPAD(' ', v_line_width - 20) || '|');
+  DBMS_OUTPUT.PUT_LINE(RPAD('-', v_line_width, '-'));
+
+  OPEN cur_totals;
+  FETCH cur_totals INTO v_publisherCount, v_sumBooks, v_sumPopularity, v_sumBorrows, v_sumReservations;
+  CLOSE cur_totals;
+
+  -- Print totals
+  DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Total Publishers', 33) || ': ' || LPAD(v_publisherCount, v_line_width - 37 - 2) || ' |');
+  DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Total Books', 33) || ': ' || LPAD(v_sumBooks, v_line_width - 37 - 2) || ' |');
+  DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Total Popularity', 33) || ': ' || LPAD(v_sumPopularity, v_line_width - 37 - 2) || ' |');
+  DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Total Borrows', 33) || ': ' || LPAD(v_sumBorrows, v_line_width - 37 - 2) || ' |');
+  DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Total Reservations', 33) || ': ' || LPAD(v_sumReservations, v_line_width - 37 - 2) || ' |');
+
+  -- Print averages
+  IF v_publisherCount > 0 THEN
+    DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Avg Books per Publisher', 33) || ': ' || LPAD(ROUND(v_sumBooks / v_publisherCount, 1), v_line_width - 37 - 2) || ' |');
+    DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Avg Borrows per Publisher', 33) || ': ' || LPAD(ROUND(v_sumBorrows / v_publisherCount, 1), v_line_width - 37 - 2) || ' |');
+    DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Avg Reservations per Publisher', 33) || ': ' || LPAD(ROUND(v_sumReservations / v_publisherCount, 1), v_line_width - 37 - 2) || ' |');
+  END IF;
+
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', v_line_width, '='));
+END;
+/
+
+EXEC PublisherPerformanceReport;

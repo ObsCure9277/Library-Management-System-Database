@@ -1,0 +1,69 @@
+-- View creation
+CREATE OR REPLACE VIEW GenreRankView AS
+WITH GenreTotals AS (
+    SELECT 
+        TRIM(UPPER(genre)) AS genre,
+        SUM(popularity) AS TotalPopularity
+    FROM 
+        Books
+    WHERE 
+        popularity IS NOT NULL
+    GROUP BY 
+        TRIM(UPPER(genre))
+),
+GenreRanked AS (
+    SELECT 
+        genre,
+        TotalPopularity,
+        DENSE_RANK() OVER (ORDER BY TotalPopularity DESC) AS GenreRank
+    FROM 
+        GenreTotals
+)
+SELECT 
+    INITCAP(TRIM(b.genre)) AS Genre,  -- Cleaned & formatted for display
+    b.bookName AS Title,
+    b.popularity AS Popularity,
+    gr.TotalPopularity AS "Genre Popularity",
+    gr.GenreRank AS "Genre Rank"
+FROM 
+    Books b
+JOIN 
+    GenreRanked gr ON TRIM(UPPER(b.genre)) = gr.genre
+WHERE 
+    b.popularity IS NOT NULL
+ORDER BY 
+    gr.GenreRank ASC,
+    Genre,
+    b.popularity DESC;
+
+-- Formatting
+SET linesize 150
+SET pagesize 150
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD-MM-YYYY';
+
+COLUMN Genre FORMAT A20 HEADING 'Genre'
+COLUMN Title FORMAT A50 HEADING 'Book Title' WORD_WRAPPED
+COLUMN Popularity FORMAT 999 HEADING 'Popularity'
+COLUMN "Genre Popularity" FORMAT 9999 HEADING 'Genre Popularity'
+COLUMN "Genre Rank" FORMAT 999 HEADING 'Genre Rank'
+
+-- Group display by Genre
+BREAK ON Genre SKIP 1 ON "Genre Popularity" NODUPLICATES ON "Genre Rank" NODUPLICATES
+
+TTITLE CENTER 'Book and Genre Popularity Analysis Report' SKIP 2
+
+SELECT 
+    Genre,
+    Title,
+    Popularity,
+    "Genre Popularity",
+    "Genre Rank"
+FROM 
+    GenreRankView
+ORDER BY 
+    "Genre Rank" ASC,
+    Genre,
+    Popularity DESC;
+
+TTITLE OFF
+CLEAR BREAKS

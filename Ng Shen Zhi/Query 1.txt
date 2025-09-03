@@ -1,0 +1,70 @@
+CREATE INDEX idx_bookcopys_status ON BookCopys(UPPER(bookCopyStatus));
+CREATE INDEX idx_bookcopys_isbn ON BookCopys(UPPER(ISBN));
+CREATE INDEX idx_borrowdetails_copyid ON BorrowDetails(UPPER(bookCopyID));
+CREATE INDEX idx_bookcopys_copyid ON BookCopys(UPPER(bookCopyID));
+CREATE INDEX idx_borrows_borrowdate ON Borrows(UPPER(borrowDate));
+
+DROP SEQUENCE seq_available_reservation_no;
+CREATE SEQUENCE seq_available_reservation_no
+START WITH 1
+INCREMENT BY 1
+NOCACHE
+NOCYCLE;
+
+CREATE OR REPLACE VIEW AvailableReservation AS
+SELECT DISTINCT 
+    bc.bookCopyID     AS book_copy, 
+    b.bookName        AS book_title, 
+    b.genre, 
+    b.popularity
+FROM 
+    BookCopys bc
+JOIN 
+    Books b ON bc.ISBN = b.ISBN
+WHERE 
+    bc.bookCopyStatus = 'Intact'
+    AND bc.bookCopyID NOT IN (
+        SELECT bd.bookCopyID
+        FROM BorrowDetails bd
+        WHERE bd.returnDate IS NULL
+    )
+    AND EXISTS (
+        SELECT 1
+        FROM BorrowDetails bd
+        JOIN Borrows br ON bd.borrowID = br.borrowID
+        WHERE bd.bookCopyID = bc.bookCopyID
+          AND CURRENT_DATE > br.borrowDate
+    );
+
+SET LINESIZE 90
+SET PAGESIZE 200
+SET UNDERLINE =
+SET COLSEP ' | '
+
+TTITLE CENTER 'Check Book Availability for Reservation' SKIP 1 -
+CENTER ========================================= SKIP 2
+
+COLUMN no           FORMAT A3   HEADING 'No' JUSTIFY LEFT
+COLUMN book_copy    FORMAT A9   HEADING 'Book Copy'
+COLUMN book_title   FORMAT A40  HEADING 'Book Title'
+COLUMN genre        FORMAT A15  HEADING 'Genre'
+COLUMN popularity   FORMAT 999  HEADING 'Popularity'
+
+SELECT 
+    TO_CHAR(seq_available_reservation_no.NEXTVAL) AS no,
+    book_copy,
+    book_title,
+    genre,
+    popularity
+FROM (
+    SELECT 
+        book_copy,
+        book_title,
+        genre,
+        popularity
+    FROM AvailableReservation
+    ORDER BY book_title
+);
+
+CLEAR COLUMNS
+TTITLE OFF

@@ -1,0 +1,108 @@
+SET SERVEROUTPUT ON;
+SET LINESIZE 135;
+SET PAGESIZE 50;
+
+CREATE OR REPLACE PROCEDURE StaffAttendanceReport
+IS
+  -- Cursor for individual staff summary
+  CURSOR staff_cursor IS
+    SELECT 
+      s.staffID,
+      s.staffName,
+      COUNT(DISTINCT sch.scheduleID) AS totalShifts,
+      COUNT(DISTINCT CASE WHEN a.attendanceStatus = 'Attend' THEN a.attendanceID END) AS daysPresent,
+      COUNT(DISTINCT CASE WHEN a.attendanceStatus = 'Absence' THEN a.attendanceID END) AS daysAbsent,
+      NVL(SUM(EXTRACT(HOUR FROM sch.endTime - sch.startTime)), 0) AS scheduledHours,
+      NVL(SUM(EXTRACT(HOUR FROM a.endTime - a.startTime)), 0) AS attendedHours
+    FROM Staffs s
+    LEFT JOIN Schedules sch ON s.staffID = sch.staffID
+    LEFT JOIN Attendance a ON sch.scheduleID = a.scheduleID
+    GROUP BY s.staffID, s.staffName;
+
+  -- Cursor for overall summary
+  CURSOR overall_cursor IS
+    SELECT 
+      COUNT(DISTINCT s.staffID) AS totalStaff,
+      COUNT(DISTINCT sch.scheduleID) AS totalShifts,
+      COUNT(DISTINCT CASE WHEN a.attendanceStatus = 'Attend' THEN a.attendanceID END) AS totalPresent,
+      COUNT(DISTINCT CASE WHEN a.attendanceStatus = 'Absence' THEN a.attendanceID END) AS totalAbsent,
+      NVL(SUM(EXTRACT(HOUR FROM sch.endTime - sch.startTime)), 0) AS totalScheduled,
+      NVL(SUM(EXTRACT(HOUR FROM a.endTime - a.startTime)), 0) AS totalAttended
+    FROM Staffs s
+    LEFT JOIN Schedules sch ON s.staffID = sch.staffID
+    LEFT JOIN Attendance a ON sch.scheduleID = a.scheduleID;
+  v_staffID         Staffs.staffID%TYPE;
+  v_staffName       Staffs.staffName%TYPE;
+  v_totalShifts     NUMBER;
+  v_daysPresent     NUMBER;
+  v_daysAbsent      NUMBER;
+  v_scheduledHours  NUMBER;
+  v_attendedHours   NUMBER;
+  v_attendanceRate  NUMBER;
+
+  v_totalStaff         NUMBER;
+  v_totalAllShifts     NUMBER;
+  v_totalAllPresent    NUMBER;
+  v_totalAllAbsent     NUMBER;
+  v_totalAllScheduled  NUMBER;
+  v_totalAllAttended   NUMBER;
+
+  report_width CONSTANT NUMBER := 134;
+
+BEGIN
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', report_width, '='));
+  DBMS_OUTPUT.PUT_LINE('| ' || RPAD(LPAD('STAFF WORK SCHEDULE AND ATTENDANCE REPORT', (report_width + LENGTH('STAFF WORK SCHEDULE AND ATTENDANCE REPORT')) / 2), report_width - 4) || ' |');
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', report_width, '='));
+  DBMS_OUTPUT.PUT_LINE('|>> Staff Summary' || RPAD(' ', report_width - 18) || '|');
+  DBMS_OUTPUT.PUT_LINE(RPAD('-', report_width, '-'));
+  DBMS_OUTPUT.PUT_LINE('| Staff ID   | Staff Name            | Shifts | Days Present | Days Absent | Scheduled Hours  | Attended Hours | Attendance Rate (%) |');
+  DBMS_OUTPUT.PUT_LINE(RPAD('-', report_width, '-'));
+
+  OPEN staff_cursor;
+  LOOP
+    FETCH staff_cursor INTO v_staffID, v_staffName, v_totalShifts, v_daysPresent, v_daysAbsent, v_scheduledHours, v_attendedHours;
+    EXIT WHEN staff_cursor%NOTFOUND;
+
+    IF v_totalShifts > 0 THEN
+      v_attendanceRate := ROUND((v_daysPresent / v_totalShifts) * 100, 2);
+    ELSE
+      v_attendanceRate := 0;
+    END IF;
+
+    DBMS_OUTPUT.PUT_LINE(
+      '| ' || RPAD(v_staffID, 9) || ' | ' ||
+      RPAD(SUBSTR(v_staffName, 1, 22), 22) || ' | ' ||
+      LPAD(v_totalShifts, 6) || ' | ' ||
+      LPAD(v_daysPresent, 12) || ' | ' ||
+      LPAD(v_daysAbsent, 11) || ' | ' ||
+      LPAD(v_scheduledHours, 16) || ' | ' ||
+      LPAD(v_attendedHours, 14) || ' | ' ||
+      LPAD(v_attendanceRate, 19) || ' |'
+    );
+  END LOOP;
+  CLOSE staff_cursor;
+
+  DBMS_OUTPUT.PUT_LINE(RPAD('-', report_width, '-'));
+  DBMS_OUTPUT.PUT_LINE('|>> Overall Summary' || RPAD(' ', report_width - 20) || '|');
+  DBMS_OUTPUT.PUT_LINE(RPAD('-', report_width, '-'));
+
+  OPEN overall_cursor;
+  FETCH overall_cursor INTO v_totalStaff, v_totalAllShifts, v_totalAllPresent, v_totalAllAbsent, v_totalAllScheduled, v_totalAllAttended;
+  CLOSE overall_cursor;
+
+  DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Total Staff', 40) || ': ' || LPAD(v_totalStaff, report_width - 46) || ' |');
+  DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Total Shifts', 40) || ': ' || LPAD(v_totalAllShifts, report_width - 46) || ' |');
+  DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Total Days Present', 40) || ': ' || LPAD(v_totalAllPresent, report_width - 46) || ' |');
+  DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Total Days Absent', 40) || ': ' || LPAD(v_totalAllAbsent, report_width - 46) || ' |');
+  DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Total Scheduled Hours', 40) || ': ' || LPAD(v_totalAllScheduled, report_width - 46) || ' |');
+  DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Total Attended Hours', 40) || ': ' || LPAD(v_totalAllAttended, report_width - 46) || ' |');
+
+  IF v_totalAllShifts > 0 THEN
+    DBMS_OUTPUT.PUT_LINE('| ' || RPAD('Avg Attendance Rate (%)', 40) || ': ' || LPAD(ROUND((v_totalAllPresent / v_totalAllShifts) * 100, 2), report_width - 46) || ' |');
+  END IF;
+
+  DBMS_OUTPUT.PUT_LINE(RPAD('=', report_width, '='));
+END;
+/
+
+EXEC StaffAttendanceReport

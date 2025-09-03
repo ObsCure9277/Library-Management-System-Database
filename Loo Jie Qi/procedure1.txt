@@ -1,0 +1,41 @@
+--Example
+SELECT * FROM Fines WHERE fineID = 'FN024';
+
+CREATE OR REPLACE PROCEDURE prc_update_fine_status(
+    p_fineID IN CHAR,
+    p_paymentID IN CHAR
+) IS
+    v_status   VARCHAR2(10);
+BEGIN
+    -- Check if the fine exists and get its status
+    SELECT fineStatus INTO v_status
+    FROM Fines
+    WHERE fineID = p_fineID;
+
+    IF v_status = 'Paid' THEN
+        DBMS_OUTPUT.PUT_LINE('Fine ID ' || p_fineID || ' is already paid.');
+        RETURN;
+    END IF;
+
+    -- Update the fine status
+    UPDATE Fines
+    SET fineStatus = 'Paid',
+        payFineDate = SYSDATE,
+        paymentID = p_paymentID
+    WHERE fineID = p_fineID;
+
+    COMMIT;
+
+    DBMS_OUTPUT.PUT_LINE('Fine ID ' || p_fineID || ' has been updated to Paid.');
+    DBMS_OUTPUT.PUT_LINE('Payment ID: ' || p_paymentID || ' | Date: ' || TO_CHAR(SYSDATE, 'DD-MM-YYYY'));
+END;
+/
+
+-- Enable DBMS Output
+SET SERVEROUTPUT ON SIZE 1000000;
+
+-- Execution Example
+EXEC prc_update_fine_status('FN024', 'PY002');
+
+--Example
+SELECT * FROM Fines WHERE fineID = 'FN024';

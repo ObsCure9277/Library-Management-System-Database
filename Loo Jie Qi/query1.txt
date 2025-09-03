@@ -1,0 +1,62 @@
+CREATE OR REPLACE VIEW OverdueBooksView AS
+SELECT 
+    m.memberName AS MemberName,
+    m.memberEmail AS MemberEmail,
+    b.bookName AS BookTitle,
+    bc.bookCopyID AS BookCopyID,
+    br.dueDate AS DueDate,
+    ROUND(
+        CASE 
+            WHEN bd.returnDate IS NOT NULL AND bd.returnDate > br.dueDate THEN bd.returnDate - br.dueDate
+            WHEN bd.returnDate IS NULL AND SYSDATE > br.dueDate THEN SYSDATE - br.dueDate
+            ELSE 0
+        END
+    ) AS DaysOverdue,
+    f.amount AS FineAmount
+FROM 
+    Borrows br
+JOIN 
+    Members m ON br.memberID = m.memberID
+JOIN 
+    BorrowDetails bd ON br.borrowID = bd.borrowID
+JOIN 
+    BookCopys bc ON bd.bookCopyID = bc.bookCopyID
+JOIN 
+    Books b ON bc.ISBN = b.ISBN
+JOIN 
+    Fines f ON f.borrowID = bd.borrowID AND f.bookCopyID = bd.bookCopyID
+WHERE 
+    (
+        (bd.returnDate IS NOT NULL AND bd.returnDate > br.dueDate) OR 
+        (bd.returnDate IS NULL AND SYSDATE > br.dueDate)
+    );
+
+-- Output formatting
+SET linesize 120
+SET pagesize 150
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD-MM-YYYY';
+
+COLUMN MemberName FORMAT A16 HEADING 'Member Name'
+COLUMN MemberEmail FORMAT A20 HEADING 'Email'
+COLUMN BookTitle FORMAT A38 HEADING 'Book Title' WORD_WRAPPED
+COLUMN BookCopyID FORMAT A11 HEADING 'Book Copy ID'
+COLUMN DueDate FORMAT A10 HEADING 'Due Date'
+COLUMN DaysOverdue FORMAT 999 HEADING 'Overdue'
+COLUMN FineAmount FORMAT $999 HEADING 'Fine Amount'
+
+TTITLE CENTER 'Overdue Books Report' SKIP 2
+
+SELECT 
+    MemberName,
+    MemberEmail,
+    BookTitle,
+    BookCopyID,
+    DueDate,
+    DaysOverdue,
+    FineAmount
+FROM 
+    OverdueBooksView
+ORDER BY 
+    DaysOverdue DESC;
+
+TTITLE OFF;

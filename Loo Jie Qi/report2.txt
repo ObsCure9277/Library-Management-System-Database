@@ -1,0 +1,141 @@
+-- Drop old sequence if exists
+DROP SEQUENCE seq_genre_id;
+
+-- Create new sequence
+CREATE SEQUENCE seq_genre_id
+START WITH 1
+INCREMENT BY 1
+NOCACHE;
+
+CREATE OR REPLACE PROCEDURE generate_collection_analysis IS
+    TYPE genre_summary_rec IS RECORD (
+        genre Books.genre%TYPE,
+        total_books NUMBER,
+        total_copies NUMBER,
+        total_borrowed NUMBER
+    );
+
+    TYPE genre_summary_tab IS TABLE OF genre_summary_rec
+        INDEX BY BINARY_INTEGER;
+
+    genre_list genre_summary_tab;
+
+    v_idx NUMBER := 0;
+    v_seq_id NUMBER;
+
+    v_title1 VARCHAR2(100);
+    v_title2 VARCHAR2(100);
+    v_line_width NUMBER := 100;
+
+    v_genre Books.genre%TYPE;
+    v_total_books NUMBER;
+    v_total_copies NUMBER;
+    v_total_borrowed NUMBER;
+
+    CURSOR genre_cursor IS
+        SELECT genre, COUNT(*) AS total_books
+        FROM Books
+        GROUP BY genre;
+
+    CURSOR book_copy_cursor(p_genre VARCHAR2) IS
+        SELECT COUNT(*)
+        FROM BookCopys bc
+        JOIN Books b ON bc.ISBN = b.ISBN
+        WHERE b.genre = p_genre;
+
+    CURSOR borrowed_cursor(p_genre VARCHAR2) IS
+        SELECT COUNT(*)
+        FROM BorrowDetails bd
+        JOIN BookCopys bc ON bd.bookCopyID = bc.bookCopyID
+        JOIN Books b ON bc.ISBN = b.ISBN
+        WHERE b.genre = p_genre;
+
+    v_grand_books NUMBER := 0;
+    v_grand_copies NUMBER := 0;
+    v_grand_borrowed NUMBER := 0;
+
+BEGIN
+    -- Header
+    v_title1 := 'COLLECTION GAP ANALYSIS';
+    v_title2 := 'Sorted by Borrowed Count (DESC)';
+
+    DBMS_OUTPUT.PUT_LINE(LPAD('=', v_line_width, '='));
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD(LPAD(v_title1, (v_line_width - 2 + LENGTH(v_title1)) / 2), v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD(LPAD(v_title2, (v_line_width - 2 + LENGTH(v_title2)) / 2), v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE(LPAD('=', v_line_width, '='));
+
+    -- Table Header
+    DBMS_OUTPUT.PUT_LINE('|>> Genre Summary' || RPAD(' ', v_line_width - 18) || '|');
+    DBMS_OUTPUT.PUT_LINE(LPAD('-', v_line_width, '-'));
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('No.', 5) || '|' || RPAD('Genre', 30) || '|' ||
+                         RPAD('Books in Collection', 23) || '|' ||
+                         RPAD('Book Copies', 20) || '|' ||
+                         RPAD('Borrowed Count', 16) || '|');
+    DBMS_OUTPUT.PUT_LINE(LPAD('-', v_line_width, '-'));
+
+    OPEN genre_cursor;
+    LOOP
+        FETCH genre_cursor INTO v_genre, v_total_books;
+        EXIT WHEN genre_cursor%NOTFOUND;
+
+        OPEN book_copy_cursor(v_genre);
+        FETCH book_copy_cursor INTO v_total_copies;
+        CLOSE book_copy_cursor;
+
+        OPEN borrowed_cursor(v_genre);
+        FETCH borrowed_cursor INTO v_total_borrowed;
+        CLOSE borrowed_cursor;
+
+        v_idx := v_idx + 1;
+        genre_list(v_idx).genre := v_genre;
+        genre_list(v_idx).total_books := v_total_books;
+        genre_list(v_idx).total_copies := v_total_copies;
+        genre_list(v_idx).total_borrowed := v_total_borrowed;
+
+        v_grand_books := v_grand_books + v_total_books;
+        v_grand_copies := v_grand_copies + v_total_copies;
+        v_grand_borrowed := v_grand_borrowed + v_total_borrowed;
+    END LOOP;
+    CLOSE genre_cursor;
+
+    DECLARE
+        i BINARY_INTEGER;
+        j BINARY_INTEGER;
+        temp genre_summary_rec;
+    BEGIN
+        FOR i IN 1 .. v_idx - 1 LOOP
+            FOR j IN i + 1 .. v_idx LOOP
+                IF genre_list(i).total_borrowed < genre_list(j).total_borrowed THEN
+                    temp := genre_list(i);
+                    genre_list(i) := genre_list(j);
+                    genre_list(j) := temp;
+                END IF;
+            END LOOP;
+        END LOOP;
+    END;
+
+    FOR i IN 1 .. v_idx LOOP
+        SELECT seq_genre_id.NEXTVAL INTO v_seq_id FROM dual;
+        DBMS_OUTPUT.PUT_LINE('|' || RPAD(v_seq_id, 5) ||
+                             '|' || RPAD(NVL(genre_list(i).genre, 'Unknown'), 30) ||
+                             '|' || RPAD(genre_list(i).total_books, 23) ||
+                             '|' || RPAD(genre_list(i).total_copies, 20) ||
+                             '|' || RPAD(genre_list(i).total_borrowed, 16) || '|');
+    END LOOP;
+
+    -- Summary
+    DBMS_OUTPUT.PUT_LINE(LPAD('-', v_line_width, '-'));
+    DBMS_OUTPUT.PUT_LINE('|>> Overall Summary' || RPAD(' ', v_line_width - 20) || '|');
+    DBMS_OUTPUT.PUT_LINE(LPAD('-', v_line_width, '-'));
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('Total Book Titles         : ' || v_grand_books, v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('Total Book Copies         : ' || v_grand_copies, v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('Total Borrowed Books      : ' || v_grand_borrowed, v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('Average Copies per Title  : ' || ROUND(v_grand_copies / v_grand_books, 2), v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('Average Borrows per Title : ' || ROUND(v_grand_borrowed / v_grand_books, 2), v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE(LPAD('=', v_line_width, '='));
+END;
+/
+
+-- Enable output and run the procedure
+SET SERVEROUTPUT ON;
+EXEC generate_collection_analysis;

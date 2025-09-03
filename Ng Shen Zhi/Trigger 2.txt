@@ -1,0 +1,19 @@
+CREATE OR REPLACE TRIGGER restrict_damaged_book_reserved
+BEFORE INSERT ON ReservationDetails
+FOR EACH ROW
+DECLARE
+  v_status BookCopys.bookCopyStatus%TYPE;
+BEGIN
+
+  SELECT bookCopyStatus INTO v_status
+  FROM BookCopys
+  WHERE bookCopyID = :NEW.bookCopyID;
+
+  IF v_status = 'Damage' THEN
+    RAISE_APPLICATION_ERROR(-20003, 'This book copy is damaged. Please reserve another book copy.');
+  END IF;
+END;
+/
+
+INSERT INTO ReservationDetails VALUES ('RS241', 'BC002', 1);
+

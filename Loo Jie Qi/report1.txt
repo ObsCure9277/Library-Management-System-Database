@@ -1,0 +1,181 @@
+CREATE INDEX idx_membership_status ON Members(UPPER(membershipStatus));
+CREATE INDEX idx_borrows_member ON Borrows(UPPER(memberID));
+CREATE INDEX idx_borrows_date ON Borrows(UPPER(borrowDate));
+CREATE INDEX idx_borrowdetails_borrowid ON BorrowDetails(UPPER(borrowID));
+
+-- Drop old sequence if exists
+DROP SEQUENCE seq_member_id;
+
+-- Create new sequence
+CREATE SEQUENCE seq_member_id
+START WITH 1
+INCREMENT BY 1
+NOCACHE;
+
+CREATE OR REPLACE PROCEDURE generate_membership_analysis(
+    p_month IN NUMBER,
+    p_year IN NUMBER
+) IS
+    v_total_members NUMBER := 0;
+    v_total_borrowings NUMBER := 0;
+    v_total_unique_books NUMBER := 0;
+    v_total_reservations NUMBER := 0;
+    v_total_fines NUMBER := 0;
+    v_earliest_date DATE;
+    v_latest_date DATE;
+    v_seq_id NUMBER;
+    v_line_width NUMBER := 115;
+
+    v_title1 VARCHAR2(100);
+    v_title2 VARCHAR2(100);
+
+    CURSOR member_cursor IS
+        SELECT m.memberName, m.expiryDate, m.memberID
+        FROM Members m;
+
+    CURSOR borrow_stats_cursor(p_memberID CHAR) IS
+        SELECT 
+            COUNT(bd.bookCopyID) AS borrow_records,
+            COUNT(DISTINCT bc.ISBN) AS unique_books
+        FROM Borrows br
+        JOIN BorrowDetails bd ON br.borrowID = bd.borrowID
+        JOIN BookCopys bc ON bd.bookCopyID = bc.bookCopyID
+        WHERE br.memberID = p_memberID
+          AND EXTRACT(MONTH FROM br.borrowDate) = p_month
+          AND EXTRACT(YEAR FROM br.borrowDate) = p_year;
+
+    CURSOR reservation_stats_cursor(p_memberID CHAR) IS
+        SELECT COUNT(rd.bookCopyID)
+        FROM Reservations r
+        JOIN ReservationDetails rd ON r.reservationID = rd.reservationID
+        WHERE r.memberID = p_memberID
+          AND EXTRACT(MONTH FROM r.reservationDate) = p_month
+          AND EXTRACT(YEAR FROM r.reservationDate) = p_year;
+
+    CURSOR fine_stats_cursor(p_memberID CHAR) IS
+        SELECT NVL(SUM(f.amount), 0)
+        FROM Fines f
+        JOIN BorrowDetails bd ON f.borrowID = bd.borrowID AND f.bookCopyID = bd.bookCopyID
+        JOIN Borrows br ON bd.borrowID = br.borrowID
+        WHERE br.memberID = p_memberID
+          AND EXTRACT(MONTH FROM f.payFineDate) = p_month
+          AND EXTRACT(YEAR FROM f.payFineDate) = p_year;
+
+    -- Variables
+    v_memberName Members.memberName%TYPE;
+    v_expiryDate Members.expiryDate%TYPE;
+    v_memberID   Members.memberID%TYPE;
+
+    v_borrow_records NUMBER;
+    v_unique_books NUMBER;
+    v_reserved_books NUMBER;
+    v_member_fine NUMBER;
+
+BEGIN
+    SELECT COUNT(*) INTO v_total_members FROM Members;
+
+    SELECT COUNT(*) INTO v_total_borrowings
+    FROM BorrowDetails bd
+    JOIN Borrows br ON bd.borrowID = br.borrowID
+    WHERE EXTRACT(MONTH FROM br.borrowDate) = p_month
+      AND EXTRACT(YEAR FROM br.borrowDate) = p_year;
+
+    SELECT COUNT(*) INTO v_total_reservations
+    FROM ReservationDetails rd
+    JOIN Reservations r ON rd.reservationID = r.reservationID
+    WHERE EXTRACT(MONTH FROM r.reservationDate) = p_month
+      AND EXTRACT(YEAR FROM r.reservationDate) = p_year;
+
+    SELECT NVL(SUM(f.amount), 0) INTO v_total_fines
+    FROM Fines f
+    WHERE EXTRACT(MONTH FROM f.payFineDate) = p_month
+      AND EXTRACT(YEAR FROM f.payFineDate) = p_year;
+
+    IF v_total_borrowings = 0 AND v_total_reservations = 0 AND v_total_fines = 0 THEN
+        DBMS_OUTPUT.PUT_LINE('No records (borrowings, reservations, fines) found for ' || p_month || '-' || p_year || '.');
+        RETURN;
+    END IF;
+
+    SELECT SUM(member_unique_count) INTO v_total_unique_books
+    FROM (
+        SELECT COUNT(DISTINCT bc.ISBN) AS member_unique_count
+        FROM BorrowDetails bd
+        JOIN Borrows br ON bd.borrowID = br.borrowID
+        JOIN BookCopys bc ON bd.bookCopyID = bc.bookCopyID
+        WHERE EXTRACT(MONTH FROM br.borrowDate) = p_month
+          AND EXTRACT(YEAR FROM br.borrowDate) = p_year
+        GROUP BY br.memberID
+    );
+
+    SELECT MIN(borrowDate), MAX(borrowDate)
+    INTO v_earliest_date, v_latest_date
+    FROM Borrows
+    WHERE EXTRACT(MONTH FROM borrowDate) = p_month
+      AND EXTRACT(YEAR FROM borrowDate) = p_year;
+
+    -- Report Header
+    v_title1 := 'LIBRARY MEMBERS';
+    v_title2 := TO_CHAR(TO_DATE(p_month || '-' || p_year, 'MM-YYYY'), 'Month YYYY');
+
+    DBMS_OUTPUT.PUT_LINE(LPAD('=', v_line_width, '='));
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD(LPAD(v_title1, (v_line_width - 2 + LENGTH(v_title1)) / 2), v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD(LPAD(v_title2, (v_line_width - 2 + LENGTH(v_title2)) / 2), v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE(LPAD('=', v_line_width, '='));
+
+    DBMS_OUTPUT.PUT_LINE('|>> Member Borrowing Summary' || RPAD(' ', v_line_width - 29) || '|');
+    DBMS_OUTPUT.PUT_LINE(LPAD('-', v_line_width, '-'));
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('No.', 5) || '|' || RPAD('Member Name', 25) || '|' || RPAD('Expiry Date', 15) || '|' ||
+                         RPAD('Borrow Records', 15) || '|' || RPAD('Unique Books', 15) || '|' || RPAD('Reservation Books', 20) ||
+                         '|' || RPAD('Fine (RM)', 12) || '|');
+    DBMS_OUTPUT.PUT_LINE(LPAD('-', v_line_width, '-'));
+
+    OPEN member_cursor;
+    LOOP
+        FETCH member_cursor INTO v_memberName, v_expiryDate, v_memberID;
+        EXIT WHEN member_cursor%NOTFOUND;
+
+        OPEN borrow_stats_cursor(v_memberID);
+        FETCH borrow_stats_cursor INTO v_borrow_records, v_unique_books;
+        CLOSE borrow_stats_cursor;
+
+        OPEN reservation_stats_cursor(v_memberID);
+        FETCH reservation_stats_cursor INTO v_reserved_books;
+        CLOSE reservation_stats_cursor;
+
+        OPEN fine_stats_cursor(v_memberID);
+        FETCH fine_stats_cursor INTO v_member_fine;
+        CLOSE fine_stats_cursor;
+
+        SELECT seq_member_id.NEXTVAL INTO v_seq_id FROM dual;
+
+        IF v_borrow_records IS NOT NULL OR v_reserved_books IS NOT NULL OR v_member_fine IS NOT NULL THEN
+            DBMS_OUTPUT.PUT_LINE('|' || RPAD(v_seq_id, 5) ||
+                                 '|' || RPAD(v_memberName, 25) ||
+                                 '|' || RPAD(TO_CHAR(v_expiryDate, 'DD-MM-YYYY'), 15) ||
+                                 '|' || RPAD(NVL(v_borrow_records, 0), 15) ||
+                                 '|' || RPAD(NVL(v_unique_books, 0), 15) ||
+                                 '|' || RPAD(NVL(v_reserved_books, 0), 20) ||
+                                 '|' || RPAD(TO_CHAR(NVL(v_member_fine, 0), '9990.00'), 12) || '|');
+        END IF;
+    END LOOP;
+    CLOSE member_cursor;
+
+    DBMS_OUTPUT.PUT_LINE(LPAD('-', v_line_width, '-'));
+    DBMS_OUTPUT.PUT_LINE('|>> Overall Summary' || RPAD(' ', v_line_width - 20) || '|');
+    DBMS_OUTPUT.PUT_LINE(LPAD('-', v_line_width, '-'));
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('Total Members               : ' || v_total_members, v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('Total Borrowings (Month)    : ' || v_total_borrowings, v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('Total Reservations (Month)  : ' || v_total_reservations, v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('Total Fines (Month)         : RM ' || v_total_fines, v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('Total Unique Books          : ' || v_total_unique_books, v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('Avg Borrowings per Member   : ' || ROUND(v_total_borrowings / v_total_members, 2), v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('Avg Reservations per Member : ' || ROUND(v_total_reservations / v_total_members, 2), v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('Avg Fines per Member        : RM ' || ROUND(v_total_fines / v_total_members, 2), v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE('|' || RPAD('Borrow Period               : ' || TO_CHAR(v_earliest_date, 'DD-MM-YYYY') || ' to ' || TO_CHAR(v_latest_date, 'DD-MM-YYYY'), v_line_width - 2) || '|');
+    DBMS_OUTPUT.PUT_LINE(LPAD('=', v_line_width, '='));
+END;
+/
+
+
+SET SERVEROUTPUT ON;
+EXEC generate_membership_analysis(5, 2023);

@@ -1,0 +1,29 @@
+CREATE OR REPLACE TRIGGER trg_PreventOverBorrowing
+BEFORE INSERT ON BorrowDetails
+FOR EACH ROW
+DECLARE
+  v_bookCount NUMBER;
+BEGIN
+  -- Count how many books are already linked to this borrowID
+  SELECT COUNT(*)
+  INTO v_bookCount
+  FROM BorrowDetails
+  WHERE borrowID = :NEW.borrowID;
+
+  -- Raise error if trying to insert more than 5 books for the same borrowID
+  IF v_bookCount >= 5 THEN
+    RAISE_APPLICATION_ERROR(
+      -20001,
+      'Book borrowing limit exceeded: Borrow ID ' || :NEW.borrowID || ' already has 5 books.'
+    );
+  END IF;
+END;
+/
+
+--Sample
+INSERT INTO BorrowDetails VALUES ('BR091', 'BC063', 1, TO_DATE('04-09-2023', 'DD-MM-YYYY'));
+INSERT INTO BorrowDetails VALUES ('BR091', 'BC064', 1, TO_DATE('04-09-2023', 'DD-MM-YYYY'));
+INSERT INTO BorrowDetails VALUES ('BR091', 'BC065', 1, TO_DATE('04-09-2023', 'DD-MM-YYYY'));
+SELECT COUNT(*) FROM borrowDetails where borrowID = 'BR091';
+
+INSERT INTO BorrowDetails VALUES ('BR091', 'BC066', 1, TO_DATE('04-09-2023', 'DD-MM-YYYY'));

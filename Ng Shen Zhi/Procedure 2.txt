@@ -1,0 +1,67 @@
+SET SERVEROUTPUT ON;
+
+CREATE OR REPLACE PROCEDURE UpdateBookCopyStatus(
+    p_bookCopyID    IN CHAR,
+    p_newStatus     IN VARCHAR2
+)
+IS
+    e_bookCopyNotFound EXCEPTION;
+    e_invalidStatus EXCEPTION;
+BEGIN
+
+    IF p_newStatus NOT IN ('Intact', 'Damage') THEN
+        RAISE e_invalidStatus;
+    END IF;
+
+    BEGIN
+        UPDATE BookCopys
+        SET bookCopyStatus = p_newStatus
+        WHERE bookCopyID = p_bookCopyID;
+
+        IF SQL%ROWCOUNT = 0 THEN
+            RAISE e_bookCopyNotFound;
+        END IF;
+        
+        COMMIT;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RAISE e_bookCopyNotFound;
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('An unexpected error occurred: ' || SQLERRM);
+            ROLLBACK; -- Rollback in case of an error
+    END;
+EXCEPTION
+    WHEN e_bookCopyNotFound THEN
+        DBMS_OUTPUT.PUT_LINE('Error: Book copy not found.');
+    WHEN e_invalidStatus THEN
+        DBMS_OUTPUT.PUT_LINE('Error: Invalid status. Allowed values are "Intact" or "Damage".');
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('An unexpected error occurred: ' || SQLERRM);
+        ROLLBACK; -- Rollback if any error occurs
+END UpdateBookCopyStatus;
+/
+
+BEGIN
+    UpdateBookCopyStatus(
+        p_bookCopyID => 'BC002',  
+        p_newStatus  => 'Intact'
+    );
+END;
+/
+Select * FROM BookCopys WHERE bookCopyID = 'BC002';
+
+BEGIN
+    UpdateBookCopyStatus(
+        p_bookCopyID => 'BC002',  
+        p_newStatus  => 'Hello'
+    );
+END;
+/
+
+BEGIN
+    UpdateBookCopyStatus(
+        p_bookCopyID => 'BC371',  
+        p_newStatus  => 'Intact'
+    );
+END;
+/

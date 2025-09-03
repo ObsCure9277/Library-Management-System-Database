@@ -1,0 +1,35 @@
+CREATE OR REPLACE FUNCTION IncrementPopularity(p_isbn VARCHAR2) RETURN NUMBER IS
+  v_new_popularity NUMBER;
+BEGIN
+  -- Increment popularity
+  UPDATE Books
+  SET popularity = NVL(popularity, 0) + 1
+  WHERE ISBN = p_isbn
+  RETURNING popularity INTO v_new_popularity;
+
+  RETURN v_new_popularity;
+END;
+/
+
+CREATE OR REPLACE TRIGGER trg_UpdateBookPopularity
+AFTER INSERT ON BorrowDetails
+FOR EACH ROW
+DECLARE
+  v_ISBN Books.ISBN%TYPE;
+  v_result NUMBER;
+BEGIN
+  -- Get the ISBN of the borrowed book copy
+  SELECT ISBN
+  INTO v_ISBN
+  FROM BookCopys
+  WHERE bookCopyID = :NEW.bookCopyID;
+
+  -- Use function to increment and capture updated popularity
+  v_result := IncrementPopularity(v_ISBN);
+END;
+/
+
+--Sample
+SELECT * FROM Books WHERE ISBN = '9788000000010';
+INSERT INTO BorrowDetails VALUES ('BR050', 'BC137', 1, NULL);
+SELECT * FROM Books WHERE ISBN = '9788000000010';
