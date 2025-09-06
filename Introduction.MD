@@ -40,44 +40,44 @@ The SQL database serves as the backbone, ensuring reliable data storage, retriev
 ## List of Modules
 
 ### 1. Membership Registration Module
-	User Sign-up: Register new users with personal details
-	- **Membership ID Generation:** Automatically generate unique membership IDs
+	- User Sign-up: Register new users with personal details
+	- Membership ID Generation: Automatically generate unique membership IDs
 
 ### 2. Track Membership Validity Module (Active or Expired)
-	- **Expiry Tracking:** Monitor membership status and restrict expired memberships
-	- **Insights:** Overview of membership status, expiration date, and renewal options
+	- Expiry Tracking: Monitor membership status and restrict expired memberships
+	- Insights: Overview of membership status, expiration date, and renewal options
 
 ### 3. Borrowing and Returning Process Module
-	- **Book Checkout:** Borrow books by membership ID and book code
-	- **Return Processing:** Update system when books are returned
+	- Book Checkout: Borrow books by membership ID and book code
+	- Return Processing: Update system when books are returned
 
 ### 4. Allow Members to Reserve Books Module
-	- **Book Reservation Requests:** Reserve books currently checked out
-	- **Reservation Status Tracking:** Check status and estimated availability
+	- Book Reservation Requests: Reserve books currently checked out
+	- Reservation Status Tracking: Check status and estimated availability
 
 ### 5. Track Due Dates and Overdue Books Module
-	- **Due Date Calculation:** Assign and display due dates
-	- **Penalty Tracking:** Log overdue books and fines
+	- Due Date Calculation: Assign and display due dates
+	- Penalty Tracking: Log overdue books and fines
 
 ### 6. Process Fines Module (Calculate Late Fees Payment)
-	- **Fine Calculation:** Compute late fees based on overdue days
-	- **Payment Processing:** Pay fines online or in-person
+	- Fine Calculation: Compute late fees based on overdue days
+	- Payment Processing: Pay fines online or in-person
 
 ### 7. Generate Fine Invoices for Members Module
-	- **Invoice Generation:** Create detailed invoices for overdue fines
-	- **Invoice History:** Record and review payment history
+	- Invoice Generation: Create detailed invoices for overdue fines
+	- Invoice History: Record and review payment history
 
 ### 8. Extend the Book Loan Period
-	- **Online Renewal Requests:** Request loan extension online
-	- **Eligibility Check:** Verify eligibility for renewal
+	- Online Renewal Requests: Request loan extension online
+	- Eligibility Check: Verify eligibility for renewal
 
 ### 9. Enable Advanced Search Options for Books
-	- **Filtered Search:** Refine searches by genre, author, popularity
-	- **Advanced Sorting Options:** Sort by genre rank or most borrowed
+	- Filtered Search: Refine searches by genre, author, popularity
+	- Advanced Sorting Options: Sort by genre rank or most borrowed
 
 ### 10. Track Staff Performance and Shift Schedules Module
-	- **Work Shift Management:** Maintain staff schedules
-	- **Performance Tracking:** Record staff activities and evaluate efficiency
+	- Work Shift Management: Maintain staff schedules
+	- Performance Tracking: Record staff activities and evaluate efficiency
 
 ---
 
