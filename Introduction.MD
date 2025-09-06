@@ -8,7 +8,9 @@ The library management system integrates both physical and digital library opera
 - **Physical Library:** Serves walk-in visitors who prefer to browse bookshelves, engage in quiet study spaces, and access printed resources directly.
 - **Digital Library:** Expands accessibility, enabling users to search for books, borrow ebooks, and access research materials from anywhere.
 
-This dual-platform approach leverages modern technology to bridge the gap between traditional library services and digital accessibility. The system ensures:
+This dual-platform approach leverages modern technology to bridge the gap between traditional library services and digital accessibility. 
+The system ensures:
+
 - Synchronized inventory management to prevent book shortages or duplicate checkouts
 - User-friendly interface for online users to browse the catalog, reserve books, and manage borrowings
 - Digital membership services
