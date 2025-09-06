@@ -9,11 +9,11 @@ The library management system integrates both physical and digital library opera
 - **Digital Library:** Expands accessibility, enabling users to search for books, borrow ebooks, and access research materials from anywhere.
 
 This dual-platform approach leverages modern technology to bridge the gap between traditional library services and digital accessibility. The system ensures:
-	- Synchronized inventory management to prevent book shortages or duplicate checkouts
-	- User-friendly interface for online users to browse the catalog, reserve books, and manage borrowings
-	- Digital membership services
-	- Real-time updates on book availability
-	- Automated reminders for due dates
+- Synchronized inventory management to prevent book shortages or duplicate checkouts
+- User-friendly interface for online users to browse the catalog, reserve books, and manage borrowings
+- Digital membership services
+- Real-time updates on book availability
+- Automated reminders for due dates
 
 ## Type of System
 
