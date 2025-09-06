@@ -40,7 +40,7 @@ The SQL database serves as the backbone, ensuring reliable data storage, retriev
 ## List of Modules
 
 ### 1. Membership Registration Module
-	- **User Sign-up:** Register new users with personal details
+	User Sign-up: Register new users with personal details
 	- **Membership ID Generation:** Automatically generate unique membership IDs
 
 ### 2. Track Membership Validity Module (Active or Expired)
